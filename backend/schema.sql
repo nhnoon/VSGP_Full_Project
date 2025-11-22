@@ -1,0 +1,41 @@
+CREATE DATABASE IF NOT EXISTS vsgp
+  CHARACTER SET utf8mb4
+  COLLATE utf8mb4_unicode_ci;
+
+USE vsgp;
+
+-- جدول المستخدمين (ثابت)
+CREATE TABLE IF NOT EXISTS user (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(50) NOT NULL,
+  email VARCHAR(120) NOT NULL UNIQUE,
+  password VARCHAR(200) NOT NULL
+) ENGINE=InnoDB;
+
+-- جدول القروبات + كود الدعوة
+CREATE TABLE IF NOT EXISTS study_group (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  name VARCHAR(120) NOT NULL,
+  owner_id INT NOT NULL,
+  invite_code VARCHAR(16) NOT NULL UNIQUE,
+  CONSTRAINT fk_owner
+    FOREIGN KEY (owner_id)
+    REFERENCES user(id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+) ENGINE=InnoDB;
+
+-- جدول أعضاء القروب
+CREATE TABLE IF NOT EXISTS group_member (
+  id INT AUTO_INCREMENT PRIMARY KEY,
+  group_id INT NOT NULL,
+  name VARCHAR(80) NOT NULL,
+  email VARCHAR(120),
+  role VARCHAR(20) DEFAULT 'member',
+  joined_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT fk_group
+    FOREIGN KEY (group_id)
+    REFERENCES study_group(id)
+    ON DELETE CASCADE
+    ON UPDATE CASCADE
+) ENGINE=InnoDB;
