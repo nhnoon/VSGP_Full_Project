@@ -1,75 +1,113 @@
 import React, { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import "../styles.css";
-
-
-
-
+import { authFetch } from "../utils/api";
 
 export default function Login() {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
+  const [email, setEmail] = useState("noon@test.com");
+  const [password, setPassword] = useState("123456");
+  const [error, setError] = useState("");
+
   const navigate = useNavigate();
 
-  const handleLogin = (e) => {
+  const handleLogin = async (e) => {
     e.preventDefault();
+    setError("");
 
-    // مؤقت فقط – بعدين بنربطه بالباك اند
-    if (email.trim() && password.trim()) {
+    try {
+      const res = await authFetch("/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email, password }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setError(data.msg || "Login failed. Please check your email or password.");
+        return;
+      }
+
+      const token =
+        data.token ||
+        data.access_token ||
+        data.jwt ||
+        data.accessToken;
+
+      if (!token) {
+        setError("Token not received from server.");
+        return;
+      }
+
+      localStorage.setItem("vsgp_token", token);
       navigate("/groups");
+    } catch (err) {
+      console.error(err);
+      setError("Login failed. Please try again.");
     }
   };
 
   return (
-    <div className="login-container">
-      {/* Left Side */}
-      <div className="login-left">
-        <h1 className="login-title">
-          Hello <span className="brand">Syno</span>! <span>👋</span>
-        </h1>
-
-        <p className="login-subtext">
-          Organize your study groups with ease.  
-          Track tasks, deadlines, members, and stay productive!
-        </p>
-
-        <p className="login-footer">© 2025 Syno. All rights reserved.</p>
+    <div className="auth-page">
+      <div className="auth-card-left">
+        <div className="auth-hero">
+          <h1>
+            Hello <span className="highlight">Syno!</span> 👋
+          </h1>
+          <p>
+            Organize your study groups with ease. Track tasks, deadlines, members,
+            and stay productive!
+          </p>
+        </div>
+        <footer className="auth-footer">© 2025 Syno. All rights reserved.</footer>
       </div>
 
-      {/* Right Side - Login Box */}
-      <div className="login-right">
+      <div className="auth-card-right">
         <h2>Welcome Back!</h2>
-        <p className="signup-text">
-          Don’t have an account? <a href="#">Create a new account</a>
+        <p className="auth-subtext">
+          Don&apos;t have an account?{" "}
+          <span className="link-like">Create a new account</span>
         </p>
 
-        <form className="login-form" onSubmit={handleLogin}>
-          <input
-            type="email"
-            placeholder="Email address"
-            className="input-field"
-            value={email}
-            onChange={(e) => setEmail(e.target.value)}
-          />
+        <form className="auth-form" onSubmit={handleLogin}>
+          <label className="auth-label">
+            Email address
+            <input
+              className="auth-input"
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="student@example.com"
+              required
+            />
+          </label>
 
-          <input
-            type="password"
-            placeholder="Password"
-            className="input-field"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-          />
+          <label className="auth-label">
+            Password
+            <input
+              className="auth-input"
+              type="password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+              placeholder="••••••••"
+              required
+            />
+          </label>
 
-          <button type="submit" className="btn-login">
+          {error && <div className="auth-error">{error}</div>}
+
+          <button type="submit" className="btn-primary-auth">
             Login Now
           </button>
 
-          <button type="button" className="btn-google">
+          <button
+            type="button"
+            className="btn-secondary-auth"
+            onClick={() => alert("Google login coming soon 🙂")}
+          >
             Login with Google
           </button>
 
-          <p className="forgot-text">
-            Forget password? <a href="#">Click here</a>
+          <p className="auth-forgot">
+            Forget password? <span className="link-like">Click here</span>
           </p>
         </form>
       </div>

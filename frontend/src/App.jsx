@@ -1,59 +1,67 @@
-import { Routes, Route, Link, useNavigate } from "react-router-dom";
-import { useEffect, useState } from "react";
-import Login from "./pages/Login.jsx";
-import Groups from "./pages/Groups.jsx";
-import GroupDashboard from "./pages/GroupDashboard.jsx";
-import "./styles.css";
+import React from "react";
+import { Routes, Route, useNavigate, Link, useLocation } from "react-router-dom";
+import Login from "./pages/Login";
+import Groups from "./pages/Groups";
+import GroupDashboard from "./pages/GroupDashboard";
+import JoinGroup from "./pages/JoinGroup";
 
-export default function App() {
-  const [token, setToken] = useState(localStorage.getItem("token") || "");
+function AppShell() {
   const navigate = useNavigate();
+  const location = useLocation();
 
-  useEffect(() => {
-    if (!token) navigate("/login");
-  }, [token, navigate]);
+  const token = localStorage.getItem("vsgp_token");
 
   const handleLogout = () => {
-    localStorage.removeItem("token");
-    setToken("");
+    localStorage.removeItem("vsgp_token");
     navigate("/login");
   };
 
+  const isAuthPage = location.pathname === "/" || location.pathname === "/login";
+
   return (
-    <>
-      <header className="header">
-        <div className="logo-section">
-          <img src="/syno_logo.png" alt="Syno" className="logo" />
+    <div className="app-shell">
+      {/* أعلى الصفحة */}
+      <header className="top-nav">
+        <div className="top-nav-left" onClick={() => navigate("/groups")}>
+          <div className="logo-circle">
+            <span className="logo-icon">S</span>
+          </div>
           <div className="logo-text">
-            <h1>Syno</h1>
-            <span>Study Platform</span>
+            <div className="logo-title">Syno</div>
+            <div className="logo-subtitle">Study Platform</div>
           </div>
         </div>
 
-        <nav>
-          <Link to="/" className="nav-link">
+        <nav className="top-nav-right">
+          <Link to={token ? "/groups" : "/login"} className="nav-link">
             Home
           </Link>
 
-          {!token ? (
-            <Link to="/login" className="btn primary">
-              Login / Register
-            </Link>
-          ) : (
-            <button onClick={handleLogout} className="btn danger">
+          {token ? (
+            <button className="nav-button-danger" onClick={handleLogout}>
               Logout
             </button>
+          ) : (
+            <Link to="/login" className="nav-button-primary">
+              Login / Register
+            </Link>
           )}
         </nav>
       </header>
 
-      <main className="page">
+      {/* محتوى الصفحات */}
+      <main className={isAuthPage ? "page-main auth-main" : "page-main"}>
         <Routes>
-          <Route path="/login" element={<Login onLogin={setToken} />} />
-          <Route path="/" element={<Groups />} />
-          <Route path="/groups/:id" element={<GroupDashboard />} />
+          <Route path="/" element={<Login />} />
+          <Route path="/login" element={<Login />} />
+          <Route path="/groups" element={<Groups />} />
+          <Route path="/groups/:groupId" element={<GroupDashboard />} />
+          <Route path="/join" element={<JoinGroup />} />
         </Routes>
       </main>
-    </>
+    </div>
   );
 }
+
+export default AppShell;
+

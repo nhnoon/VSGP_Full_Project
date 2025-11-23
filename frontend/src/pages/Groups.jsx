@@ -1,116 +1,158 @@
-import axios from "axios";
-import { useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
-const API_BASE = "http://localhost:5000";
+import { authFetch } from "../utils/api";
 
 export default function Groups() {
   const [groups, setGroups] = useState([]);
-  const [name, setName] = useState("");
-  const [msg, setMsg] = useState("");
+  const [newGroupName, setNewGroupName] = useState("");
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [error, setError] = useState("");
+
   const navigate = useNavigate();
 
   useEffect(() => {
-    axios
-      .get(`${API_BASE}/groups/`)
-      .then((res) => setGroups(res.data))
-      .catch((err) => {
-        console.error(err);
-        setMsg("Failed to load groups");
-      });
-  }, []);
-
-  const handleCreate = async (e) => {
-    e.preventDefault();
-    setMsg("");
-
-    if (!name.trim()) {
-      setMsg("Please enter a group name");
+    const token = localStorage.getItem("vsgp_token");
+    if (!token) {
+      navigate("/login");
       return;
     }
 
-    try {
-      const res = await axios.post(`${API_BASE}/groups/`, { name });
-      setGroups((prev) => [res.data, ...prev]);
-      setName("");
-      setMsg("Group created");
-    } catch (err) {
-      console.error(err);
-      setMsg("Error creating group");
-    }
+    const loadGroups = async () => {
+      setLoading(true);
+      setError("");
+
+      try {
+        const res = await authFetch("/groups/", { method: "GET" });
+        const data = await res.json().catch(() => ({}));
+
+        if (!res.ok) {
+          throw new Error(data.msg || "Failed to load groups");
+        }
+
+        if (Array.isArray(data)) {
+          setGroups(data);
+        } else if (Array.isArray(data.groups)) {
+          setGroups(data.groups);
+        } else {
+          setGroups([]);
+        }
+      } catch (err) {
+        console.error(err);
+        setError("Error loading groups. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadGroups();
+  }, [navigate]);
+
+  const handleOpenGroup = (groupId) => {
+    if (!groupId) return;
+    navigate(`/groups/${groupId}`);
   };
 
-  const handleDelete = async (id) => {
-    const ok = window.confirm("Are you sure you want to delete this group?");
-    if (!ok) return;
+  const handleCreateGroup = async (e) => {
+    e.preventDefault();
+    setError("");
+
+    const name = newGroupName.trim();
+    if (!name) {
+      setError("Please enter a group name.");
+      return;
+    }
+
+    setCreating(true);
 
     try {
-      await axios.delete(`${API_BASE}/groups/${id}`);
-      setGroups((prev) => prev.filter((g) => g.id !== id));
+      const res = await authFetch("/groups/", {
+        method: "POST",
+        body: JSON.stringify({ name }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        throw new Error(data.msg || "Failed to create group");
+      }
+
+      // احتمال الباك يرجّع { id, name } أو { group_id, name }
+      const newGroup = {
+        id: data.id || data.group_id,
+        name: data.name || name,
+        ...data,
+      };
+
+      setGroups((prev) => [...prev, newGroup]);
+      setNewGroupName("");
+
+      if (newGroup.id) {
+        navigate(`/groups/${newGroup.id}`);
+      }
     } catch (err) {
       console.error(err);
-      setMsg("Error deleting group");
+      setError(err.message || "Error creating group.");
+    } finally {
+      setCreating(false);
     }
-  };
-
-  const openDashboard = (id) => {
-    navigate(`/groups/${id}`);
   };
 
   return (
-    <div>
-      <h2 className="page-title">Your Study Groups</h2>
+    <div className="groups-page">
+      <div className="groups-header">
+        <h1>Your Study Groups</h1>
+        <p>Manage your Syno groups, tasks, files and members in one place.</p>
+      </div>
 
-      <form onSubmit={handleCreate} className="card form-card">
-        <label className="field-label">
-          Group name
-          <input
-            className="text-input"
-            placeholder="e.g. COE201 - Midterm Revision"
-            value={name}
-            onChange={(e) => setName(e.target.value)}
-          />
-        </label>
-        <button type="submit" className="btn primary">
-          Create Group
-        </button>
-      </form>
+      <div className="groups-content">
+        <div className="groups-create-card">
+          <h2>Create a new group</h2>
+          <form onSubmit={handleCreateGroup} className="groups-create-form">
+            <input
+              type="text"
+              placeholder="e.g. CS 321 – Midterm Squad"
+              value={newGroupName}
+              onChange={(e) => setNewGroupName(e.target.value)}
+              className="groups-input"
+            />
+            <button type="submit" disabled={creating} className="groups-button">
+              {creating ? "Creating..." : "Create group"}
+            </button>
+          </form>
+          {error && <div className="groups-error">{error}</div>}
+        </div>
 
-      {msg && <p className="status-msg">{msg}</p>}
+        <div className="groups-list-card">
+          <h2>Your groups</h2>
 
-      <div className="card">
-        {groups.length === 0 ? (
-          <p className="empty-text">No groups yet. Create your first group ✨</p>
-        ) : (
-          <ul className="group-list">
-            {groups.map((g) => (
-              <li key={g.id} className="group-item">
-                <div className="group-info">
-                  <span className="group-name">{g.name}</span>
-                  <span className="group-meta">ID: {g.id}</span>
-                </div>
-                <div className="group-actions">
-                  <button
-                    type="button"
-                    className="btn secondary"
-                    onClick={() => openDashboard(g.id)}
-                  >
-                    Open
-                  </button>
-                  <button
-                    type="button"
-                    className="btn danger"
-                    onClick={() => handleDelete(g.id)}
-                  >
-                    Delete
-                  </button>
-                </div>
-              </li>
-            ))}
-          </ul>
-        )}
+          {loading ? (
+            <p>Loading groups...</p>
+          ) : groups.length === 0 ? (
+            <p>You don't have any groups yet. Create your first group above ✨</p>
+          ) : (
+            <ul className="groups-list">
+              {groups.map((g) => (
+                <li
+                  key={g.id}
+                  className="groups-item"
+                  onClick={() => handleOpenGroup(g.id)}
+                >
+                  <div className="groups-item-main">
+                    <h3>{g.name}</h3>
+                    {g.course_code && (
+                      <span className="groups-tag">{g.course_code}</span>
+                    )}
+                  </div>
+                  {g.description && (
+                    <p className="groups-item-desc">{g.description}</p>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
       </div>
     </div>
   );
 }
-
