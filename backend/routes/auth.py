@@ -6,7 +6,6 @@ from models.user import User
 
 auth_bp = Blueprint("auth", __name__)
 
-
 @auth_bp.post("/register")
 def register():
     data = request.get_json() or {}
@@ -27,7 +26,7 @@ def register():
     db.session.commit()
 
     token = create_access_token(identity=user.id)
-    return jsonify({"access": token}), 201
+    return jsonify({"access_token": token}), 201
 
 
 @auth_bp.post("/login")
@@ -45,4 +44,4 @@ def login():
         return jsonify({"msg": "Invalid email or password"}), 401
 
     token = create_access_token(identity=user.id)
-    return jsonify({"access": token}), 200
+    return jsonify({"access_token": token}), 200
