@@ -15,16 +15,23 @@ def create_app():
 
     app = Flask(__name__)
 
+    # إعداد قاعدة البيانات
     app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
         "DATABASE_URL",
         "sqlite:///vsgp.db"  # احتياط لو ما اشتغل الـ .env
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+
+    # JWT
     app.config["JWT_SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
-    # نحدد صراحة أن التوكن موجود في الـ Headers فقط
     app.config["JWT_TOKEN_LOCATION"] = ["headers"]
     app.config["JWT_COOKIE_CSRF_PROTECT"] = False
     app.config["JWT_HEADER_TYPE"] = "Bearer"
+
+    # إعداد مجلد رفع الملفات
+    upload_folder = os.path.join(os.path.dirname(__file__), "uploads")
+    app.config["UPLOAD_FOLDER"] = upload_folder
+    os.makedirs(upload_folder, exist_ok=True)
 
     # تفعيل CORS للفرونت
     CORS(app)
@@ -34,19 +41,17 @@ def create_app():
     jwt.init_app(app)
 
     # استيراد النماذج قبل إنشاء الجداول
-    from models.user import User        # noqa: F401
-    from models.group import StudyGroup # noqa: F401
-    from models.task import Task        # noqa: F401  ← جدول المهام
-
-    # استيراد الـ Blueprints بعد ما يكون كل شيء جاهز
-    from routes.auth import auth_bp
-    from routes.groups import groups_bp
-    from routes.tasks import tasks_bp   # ← راوت المهام
+    from models.user import User  # noqa: F401
+    from models.group import StudyGroup  # noqa: F401
+    from models.task import Task  # noqa: F401
+    from models.file import GroupFile  # noqa: F401
 
     # تسجيل الـ Blueprints
+    from routes.auth import auth_bp
+    from routes.groups import groups_bp
+
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(groups_bp, url_prefix="/groups")
-    app.register_blueprint(tasks_bp)    # بدون prefix: المسارات تبدأ بـ /groups/...
 
     # إنشاء الجداول أول مرة
     with app.app_context():

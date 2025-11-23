@@ -450,3 +450,121 @@ nav {
     order: 1;
   }
 }
+/* ---- LOGIN PAGE STYLE ---- */
+
+body {
+  margin: 0;
+  font-family: "Poppins", sans-serif;
+  background: #f5f6fa;
+}
+
+.login-container {
+  display: flex;
+  height: 100vh;
+}
+
+/* LEFT SIDE */
+.login-left {
+  flex: 1;
+  background: linear-gradient(135deg, #4338ca, #6d28d9);
+  color: white;
+  padding: 60px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.login-title {
+  font-size: 48px;
+  font-weight: 700;
+  margin-bottom: 15px;
+}
+
+.brand {
+  color: #ffe082;
+}
+
+.login-subtext {
+  font-size: 18px;
+  max-width: 420px;
+  line-height: 1.6;
+  opacity: 0.9;
+}
+
+.login-footer {
+  margin-top: 80px;
+  opacity: 0.7;
+}
+
+/* RIGHT SIDE */
+.login-right {
+  flex: 1;
+  background: white;
+  padding: 70px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.login-right h2 {
+  margin: 0;
+  font-size: 32px;
+  font-weight: 600;
+}
+
+.signup-text {
+  margin: 8px 0 30px;
+  font-size: 15px;
+  color: #555;
+}
+
+.signup-text a {
+  color: #6d28d9;
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.input-field {
+  padding: 15px;
+  font-size: 16px;
+  border: 1.5px solid #ddd;
+  border-radius: 8px;
+  outline: none;
+  transition: 0.2s;
+}
+
+.input-field:focus {
+  border-color: #6d28d9;
+}
+
+.btn-login {
+  background: #111;
+  color: white;
+  padding: 15px;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.btn-google {
+  background: white;
+  border: 1.5px solid #ddd;
+  padding: 15px;
+  border-radius: 8px;
+  font-size: 16px;
+  cursor: pointer;
+}
+
+.forgot-text {
+  font-size: 14px;
+  margin-top: 10px;
+}
+
+.forgot-text a {
+  color: #6d28d9;
+}

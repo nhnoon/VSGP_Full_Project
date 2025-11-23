@@ -1,104 +1,78 @@
-import { useState } from "react";
-import axios from "axios";
+import React, { useState } from "react";
+import { useNavigate } from "react-router-dom";
+import "../styles.css";
 
-const API_BASE = "http://localhost:5000";
 
-export default function Login({ onLogin }) {
-  const [mode, setMode] = useState("login"); // login | register
-  const [name, setName] = useState("");
+
+
+
+export default function Login() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [msg, setMsg] = useState("");
+  const navigate = useNavigate();
 
-  const handleSubmit = async (e) => {
+  const handleLogin = (e) => {
     e.preventDefault();
-    setMsg("");
 
-    try {
-      if (mode === "register") {
-        const res = await axios.post(`${API_BASE}/auth/register`, {
-          name,
-          email,
-          password
-        });
-        const token = res.data.access;
-        localStorage.setItem("token", token);
-        onLogin(token);
-        setMsg("Registered & logged in successfully");
-      } else {
-        const res = await axios.post(`${API_BASE}/auth/login`, {
-          email,
-          password
-        });
-        const token = res.data.access;
-        localStorage.setItem("token", token);
-        onLogin(token);
-        setMsg("Logged in successfully");
-      }
-    } catch (err) {
-      const message = err.response?.data?.msg || "Error";
-      setMsg(message);
+    // مؤقت فقط – بعدين بنربطه بالباك اند
+    if (email.trim() && password.trim()) {
+      navigate("/groups");
     }
   };
 
   return (
-    <div style={{ maxWidth: "400px", margin: "0 auto" }}>
-      <h2>{mode === "login" ? "Login" : "Register"}</h2>
+    <div className="login-container">
+      {/* Left Side */}
+      <div className="login-left">
+        <h1 className="login-title">
+          Hello <span className="brand">Syno</span>! <span>👋</span>
+        </h1>
 
-      <form onSubmit={handleSubmit}>
-        {mode === "register" && (
-          <div style={{ marginBottom: "10px" }}>
-            <label>
-              Name:
-              <input
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                required
-              />
-            </label>
-          </div>
-        )}
+        <p className="login-subtext">
+          Organize your study groups with ease.  
+          Track tasks, deadlines, members, and stay productive!
+        </p>
 
-        <div style={{ marginBottom: "10px" }}>
-          <label>
-            Email:
-            <input
-              type="email"
-              value={email}
-              required
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </label>
-        </div>
+        <p className="login-footer">© 2025 Syno. All rights reserved.</p>
+      </div>
 
-        <div style={{ marginBottom: "10px" }}>
-          <label>
-            Password:
-            <input
-              type="password"
-              value={password}
-              required
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </label>
-        </div>
+      {/* Right Side - Login Box */}
+      <div className="login-right">
+        <h2>Welcome Back!</h2>
+        <p className="signup-text">
+          Don’t have an account? <a href="#">Create a new account</a>
+        </p>
 
-        <button type="submit">
-          {mode === "login" ? "Login" : "Register"}
-        </button>
-      </form>
+        <form className="login-form" onSubmit={handleLogin}>
+          <input
+            type="email"
+            placeholder="Email address"
+            className="input-field"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+          />
 
-      {msg && <p style={{ marginTop: "10px" }}>{msg}</p>}
+          <input
+            type="password"
+            placeholder="Password"
+            className="input-field"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+          />
 
-      <button
-        style={{ marginTop: "10px" }}
-        type="button"
-        onClick={() =>
-          setMode(mode === "login" ? "register" : "login")
-        }
-      >
-        Switch to {mode === "login" ? "Register" : "Login"}
-      </button>
+          <button type="submit" className="btn-login">
+            Login Now
+          </button>
+
+          <button type="button" className="btn-google">
+            Login with Google
+          </button>
+
+          <p className="forgot-text">
+            Forget password? <a href="#">Click here</a>
+          </p>
+        </form>
+      </div>
     </div>
   );
 }

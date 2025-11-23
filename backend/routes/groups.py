@@ -1,14 +1,21 @@
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app, send_from_directory
 from app import db
 from models.group import StudyGroup, GroupMember
 from models.task import Task
+from models.file import GroupFile
 import secrets
+from datetime import datetime
+from werkzeug.utils import secure_filename
+from uuid import uuid4
+import os
 
 groups_bp = Blueprint("groups", __name__)
 
-# -------------------------
-# Generate Invite Code
-# -------------------------
+
+# =========================
+# Generate invite code
+# =========================
+
 def generate_invite_code(length: int = 8) -> str:
     alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"
     while True:
@@ -17,12 +24,13 @@ def generate_invite_code(length: int = 8) -> str:
             return code
 
 
-# -------------------------
-# Get all groups
-# -------------------------
+# =========================
+# Groups CRUD
+# =========================
+
 @groups_bp.get("/")
 def get_groups():
-    uid = 1  # ثابت حالياً
+    uid = 1
     groups = (
         StudyGroup.query
         .filter_by(owner_id=uid)
@@ -39,9 +47,6 @@ def get_groups():
     ])
 
 
-# -------------------------
-# Create group
-# -------------------------
 @groups_bp.post("/")
 def create_group():
     uid = 1
@@ -63,9 +68,6 @@ def create_group():
     }), 201
 
 
-# -------------------------
-# Get single group
-# -------------------------
 @groups_bp.get("/<int:group_id>")
 def get_group(group_id):
     uid = 1
@@ -76,20 +78,19 @@ def get_group(group_id):
 
     members_count = GroupMember.query.filter_by(group_id=group.id).count()
     tasks_count = Task.query.filter_by(group_id=group.id).count()
+    files_count = GroupFile.query.filter_by(group_id=group.id).count()
 
     return jsonify({
         "id": group.id,
         "name": group.name,
+        "owner_id": group.owner_id,
         "invite_code": group.invite_code,
         "members_count": members_count,
-        "files_count": 0,
+        "files_count": files_count,
         "tasks_count": tasks_count,
     })
 
 
-# -------------------------
-# Delete group
-# -------------------------
 @groups_bp.delete("/<int:group_id>")
 def delete_group(group_id):
     uid = 1
@@ -101,11 +102,11 @@ def delete_group(group_id):
     db.session.delete(group)
     db.session.commit()
 
-    return jsonify({"msg": "Group deleted"})
+    return jsonify({"msg": "Group deleted"}), 200
 
 
 # =========================
-#        Members
+# Members
 # =========================
 
 @groups_bp.get("/<int:group_id>/members")
@@ -132,6 +133,7 @@ def get_members(group_id):
 def add_member(group_id):
     uid = 1
     group = StudyGroup.query.filter_by(id=group_id, owner_id=uid).first()
+
     if not group:
         return jsonify({"msg": "Group not found"}), 404
 
@@ -164,6 +166,7 @@ def add_member(group_id):
 def delete_member(group_id, member_id):
     uid = 1
     group = StudyGroup.query.filter_by(id=group_id, owner_id=uid).first()
+
     if not group:
         return jsonify({"msg": "Group not found"}), 404
 
@@ -174,11 +177,206 @@ def delete_member(group_id, member_id):
     db.session.delete(member)
     db.session.commit()
 
-    return jsonify({"msg": "Member deleted"})
+    return jsonify({"msg": "Member deleted"}), 200
 
 
 # =========================
-#     Invite Code
+# Tasks
+# =========================
+
+@groups_bp.get("/<int:group_id>/tasks")
+def get_tasks(group_id):
+    uid = 1
+    group = StudyGroup.query.filter_by(id=group_id, owner_id=uid).first()
+    if not group:
+        return jsonify({"msg": "Group not found"}), 404
+
+    tasks = Task.query.filter_by(group_id=group.id).order_by(Task.id.desc()).all()
+
+    return jsonify([t.to_dict() for t in tasks])
+
+
+@groups_bp.post("/<int:group_id>/tasks")
+def create_task(group_id):
+    uid = 1
+    group = StudyGroup.query.filter_by(id=group_id, owner_id=uid).first()
+
+    if not group:
+        return jsonify({"msg": "Group not found"}), 404
+
+    data = request.get_json() or {}
+
+    title = (data.get("title") or "").strip()
+    description = (data.get("description") or "").strip()
+    priority = (data.get("priority") or "Normal").strip()
+
+    due_date_str = data.get("due_date")
+    due_date = None
+
+    if due_date_str:
+        try:
+            due_date = datetime.strptime(due_date_str, "%Y-%m-%d").date()
+        except ValueError:
+            return jsonify({"msg": "Invalid date format, use YYYY-MM-DD"}), 400
+
+    if not title:
+        return jsonify({"msg": "title is required"}), 400
+
+    task = Task(
+        group_id=group.id,
+        title=title,
+        description=description,
+        priority=priority,
+        due_date=due_date,
+    )
+
+    db.session.add(task)
+    db.session.commit()
+
+    return jsonify(task.to_dict()), 201
+
+
+@groups_bp.patch("/<int:group_id>/tasks/<int:task_id>")
+def update_task(group_id, task_id):
+    uid = 1
+    group = StudyGroup.query.filter_by(id=group_id, owner_id=uid).first()
+
+    if not group:
+        return jsonify({"msg": "Group not found"}), 404
+
+    task = Task.query.filter_by(id=task_id, group_id=group.id).first()
+    if not task:
+        return jsonify({"msg": "Task not found"}), 404
+
+    data = request.get_json() or {}
+
+    if "title" in data:
+        task.title = (data["title"] or "").strip() or task.title
+
+    if "description" in data:
+        task.description = (data["description"] or "").strip()
+
+    if "priority" in data:
+        task.priority = (data["priority"] or "").strip() or task.priority
+
+    if "is_done" in data:
+        task.is_done = bool(data["is_done"])
+
+    db.session.commit()
+
+    return jsonify(task.to_dict())
+
+
+@groups_bp.delete("/<int:group_id>/tasks/<int:task_id>")
+def delete_task(group_id, task_id):
+    uid = 1
+    group = StudyGroup.query.filter_by(id=group_id, owner_id=uid).first()
+
+    if not group:
+        return jsonify({"msg": "Group not found"}), 404
+
+    task = Task.query.filter_by(id=task_id, group_id=group.id).first()
+
+    if not task:
+        return jsonify({"msg": "Task not found"}), 404
+
+    db.session.delete(task)
+    db.session.commit()
+
+    return jsonify({"msg": "Task deleted"}), 200
+
+
+# =========================
+# Files
+# =========================
+
+@groups_bp.get("/<int:group_id>/files")
+def list_files(group_id):
+    uid = 1
+    group = StudyGroup.query.filter_by(id=group_id, owner_id=uid).first()
+    if not group:
+        return jsonify({"msg": "Group not found"}), 404
+
+    files = (
+        GroupFile.query
+        .filter_by(group_id=group.id)
+        .order_by(GroupFile.uploaded_at.desc())
+        .all()
+    )
+
+    return jsonify([f.to_dict() for f in files])
+
+
+@groups_bp.post("/<int:group_id>/files")
+def upload_file(group_id):
+    uid = 1
+    group = StudyGroup.query.filter_by(id=group_id, owner_id=uid).first()
+    if not group:
+        return jsonify({"msg": "Group not found"}), 404
+
+    if "file" not in request.files:
+        return jsonify({"msg": "No file part"}), 400
+
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"msg": "No selected file"}), 400
+
+    original_name = secure_filename(file.filename)
+    if not original_name:
+        return jsonify({"msg": "Invalid file name"}), 400
+
+    unique_name = f"{uuid4().hex}_{original_name}"
+    upload_folder = current_app.config["UPLOAD_FOLDER"]
+    os.makedirs(upload_folder, exist_ok=True)
+
+    file.save(os.path.join(upload_folder, unique_name))
+
+    gf = GroupFile(
+        group_id=group.id,
+        filename=unique_name,
+        original_name=original_name,
+    )
+    db.session.add(gf)
+    db.session.commit()
+
+    return jsonify(gf.to_dict()), 201
+
+
+@groups_bp.delete("/<int:group_id>/files/<int:file_id>")
+def delete_file(group_id, file_id):
+    uid = 1
+    group = StudyGroup.query.filter_by(id=group_id, owner_id=uid).first()
+    if not group:
+        return jsonify({"msg": "Group not found"}), 404
+
+    gf = GroupFile.query.filter_by(id=file_id, group_id=group.id).first()
+    if not gf:
+        return jsonify({"msg": "File not found"}), 404
+
+    file_path = os.path.join(current_app.config["UPLOAD_FOLDER"], gf.filename)
+    if os.path.exists(file_path):
+        os.remove(file_path)
+
+    db.session.delete(gf)
+    db.session.commit()
+
+    return jsonify({"msg": "File deleted"}), 200
+
+
+@groups_bp.get("/files/<int:file_id>/download")
+def download_file(file_id):
+    gf = GroupFile.query.get_or_404(file_id)
+    upload_folder = current_app.config["UPLOAD_FOLDER"]
+    return send_from_directory(
+        upload_folder,
+        gf.filename,
+        as_attachment=True,
+        download_name=gf.original_name,
+    )
+
+
+# =========================
+# Invite by code
 # =========================
 
 @groups_bp.get("/invite/<string:code>")
@@ -187,11 +385,13 @@ def get_group_by_invite(code):
     if not group:
         return jsonify({"msg": "Invalid invite code"}), 404
 
-    return jsonify({
-        "id": group.id,
-        "name": group.name,
-        "invite_code": group.invite_code,
-    })
+    return jsonify(
+        {
+            "id": group.id,
+            "name": group.name,
+            "invite_code": group.invite_code,
+        }
+    )
 
 
 @groups_bp.post("/invite/<string:code>/join")
@@ -215,10 +415,15 @@ def join_group_by_invite(code):
     db.session.add(member)
     db.session.commit()
 
-    return jsonify({
-        "id": member.id,
-        "name": member.name,
-        "email": member.email,
-        "role": member.role,
-        "group_id": group.id,
-    }), 201
+    return (
+        jsonify(
+            {
+                "id": member.id,
+                "name": member.name,
+                "email": member.email,
+                "role": member.role,
+                "group_id": group.id,
+            }
+        ),
+        201,
+    )
