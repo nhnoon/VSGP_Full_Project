@@ -1,22 +1,34 @@
-const API_BASE = "http://127.0.0.1:5000";
+export const API_BASE = "http://localhost:5000";
 
-export function authFetch(path, options = {}) {
-  const token = localStorage.getItem("vsgp_token");
-  const body = options.body;
-
-  const isFormData = body instanceof FormData;
+export async function authFetch(path, options = {}) {
+  const token = localStorage.getItem("token");
 
   const headers = {
-    ...(isFormData ? {} : { "Content-Type": "application/json" }),
+    "Content-Type": "application/json",
     ...(options.headers || {}),
   };
 
   if (token) {
-    headers.Authorization = `Bearer ${token}`;
+    headers["Authorization"] = `Bearer ${token}`;
   }
 
-  return fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${API_BASE}${path}`, {
     ...options,
     headers,
   });
+
+  if (!res.ok) {
+    let message = "API error";
+    try {
+      const data = await res.json();
+      if (data && data.msg) message = data.msg;
+    } catch {
+      const text = await res.text().catch(() => "");
+      if (text) message = text;
+    }
+    throw new Error(message);
+  }
+
+  return res;
 }
+

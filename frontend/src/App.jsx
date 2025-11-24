@@ -3,7 +3,9 @@ import { Routes, Route, useNavigate, Link, useLocation } from "react-router-dom"
 import Login from "./pages/Login";
 import Groups from "./pages/Groups";
 import GroupDashboard from "./pages/GroupDashboard";
-import JoinGroup from "./pages/JoinGroup";
+import JoinGroup from "./pages/JoinGroup"; 
+import Register from "./pages/Register";
+
 
 function AppShell() {
   const navigate = useNavigate();
@@ -57,6 +59,8 @@ function AppShell() {
           <Route path="/groups" element={<Groups />} />
           <Route path="/groups/:groupId" element={<GroupDashboard />} />
           <Route path="/join" element={<JoinGroup />} />
+          <Route path="/register" element={<Register />} />
+
         </Routes>
       </main>
     </div>
