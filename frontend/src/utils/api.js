@@ -1,12 +1,17 @@
-export const API_BASE = "http://localhost:5000";
+// src/utils/api.js
+export const API_BASE =
+  import.meta.env.VITE_API_BASE || "http://127.0.0.1:5000";
 
 export async function authFetch(path, options = {}) {
-  const token = localStorage.getItem("token");
+  const token = localStorage.getItem("vsgp_token");
 
   const headers = {
-    "Content-Type": "application/json",
     ...(options.headers || {}),
   };
+
+  if (!(options.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
+  }
 
   if (token) {
     headers["Authorization"] = `Bearer ${token}`;
@@ -18,17 +23,16 @@ export async function authFetch(path, options = {}) {
   });
 
   if (!res.ok) {
-    let message = "API error";
+    let data = {};
     try {
-      const data = await res.json();
-      if (data && data.msg) message = data.msg;
-    } catch {
-      const text = await res.text().catch(() => "");
-      if (text) message = text;
+      data = await res.json();
+    } catch (e) {
+      // ignore
     }
-    throw new Error(message);
+    throw new Error(data.msg || `API error: ${res.status}`);
   }
 
   return res;
 }
+
 
