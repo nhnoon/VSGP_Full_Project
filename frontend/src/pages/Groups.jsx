@@ -11,6 +11,7 @@ export default function Groups() {
 
   const navigate = useNavigate();
 
+  // تحميل القروبات بعد تسجيل الدخول
   useEffect(() => {
     const token = localStorage.getItem("vsgp_token");
     if (!token) {
@@ -48,11 +49,21 @@ export default function Groups() {
     loadGroups();
   }, [navigate]);
 
+  // فتح صفحة القروب
   const handleOpenGroup = (groupId) => {
     if (!groupId) return;
-    navigate(`/groups/${groupId}`);
+
+    const groupObj = groups.find((g) => g.id === groupId);
+
+    if (groupObj) {
+      // نرسل بيانات القروب (لو احتجنا role/isOwner)
+      navigate(`/groups/${groupId}`, { state: { group: groupObj } });
+    } else {
+      navigate(`/groups/${groupId}`);
+    }
   };
 
+  // إنشاء قروب جديد
   const handleCreateGroup = async (e) => {
     e.preventDefault();
     setError("");
@@ -77,18 +88,24 @@ export default function Groups() {
         throw new Error(data.msg || "Failed to create group");
       }
 
-      // احتمال الباك يرجّع { id, name } أو { group_id, name }
+      // نبني object واضح للقروب الجديد
       const newGroup = {
         id: data.id || data.group_id,
         name: data.name || name,
-        ...data,
+        course_code: data.course_code,
+        description: data.description,
+        // نعلّم في الواجهة إن اللي أنشأه هو المالك (owner/admin)
+        isOwner: true,
+        role: data.role || "admin",
       };
 
+      // نضيفه لقائمة القروبات في الواجهة
       setGroups((prev) => [...prev, newGroup]);
       setNewGroupName("");
 
+      // نروح لصفحة القروب ونرسل معها بياناته
       if (newGroup.id) {
-        navigate(`/groups/${newGroup.id}`);
+        navigate(`/groups/${newGroup.id}`, { state: { group: newGroup } });
       }
     } catch (err) {
       console.error(err);
@@ -106,6 +123,7 @@ export default function Groups() {
       </div>
 
       <div className="groups-content">
+        {/* كرت إنشاء قروب جديد */}
         <div className="groups-create-card">
           <h2>Create a new group</h2>
           <form onSubmit={handleCreateGroup} className="groups-create-form">
@@ -123,6 +141,7 @@ export default function Groups() {
           {error && <div className="groups-error">{error}</div>}
         </div>
 
+        {/* قائمة القروبات */}
         <div className="groups-list-card">
           <h2>Your groups</h2>
 

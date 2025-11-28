@@ -1,11 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useLocation } from "react-router-dom";
 import { authFetch } from "../utils/api";
 
 const TABS = ["overview", "members", "files", "chat", "tasks"];
 
 export default function GroupDashboard() {
   const { groupId } = useParams();
+  const location = useLocation();
 
   const [group, setGroup] = useState(null);
   const [activeTab, setActiveTab] = useState("overview");
@@ -36,6 +37,11 @@ export default function GroupDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
+  // هل المستخدم مالك القروب (owner/admin) بناء على الـ state القادم من /groups
+  const [isOwner, setIsOwner] = useState(
+    location.state?.group?.isOwner || location.state?.group?.role === "admin" || false
+  );
+
   // تحميل بيانات القروب + الأعضاء + التاسكات + الملفات + الرسائل
   useEffect(() => {
     const loadData = async () => {
@@ -48,8 +54,14 @@ export default function GroupDashboard() {
           method: "GET",
         });
         const groupData = await groupRes.json().catch(() => ({}));
-        if (!groupRes.ok) throw new Error(groupData.msg || "Failed to load group.");
+        if (!groupRes.ok)
+          throw new Error(groupData.msg || "Failed to load group.");
         setGroup(groupData);
+
+        // لو الباك يرجّع is_owner نستخدمها
+        if (typeof groupData.is_owner === "boolean") {
+          setIsOwner(groupData.is_owner);
+        }
 
         // الأعضاء
         const membersRes = await authFetch(`/groups/${groupId}/members`, {
@@ -273,7 +285,8 @@ export default function GroupDashboard() {
             <button
               key={tab}
               className={
-                "sidebar-tab" + (activeTab === tab ? " sidebar-tab-active" : "")
+                "sidebar-tab" +
+                (activeTab === tab ? " sidebar-tab-active" : "")
               }
               onClick={() => setActiveTab(tab)}
             >
@@ -298,7 +311,9 @@ export default function GroupDashboard() {
                   </div>
                   <div className="invite-box">
                     <div className="invite-label">Invite code</div>
-                    <div className="invite-code">{group.invite_code}</div>
+                    <div className="invite-code">
+                      {group.invite_code || "———"}
+                    </div>
                     <button className="small-pill-btn" onClick={handleCopyInvite}>
                       Copy invite link
                     </button>
@@ -340,7 +355,8 @@ export default function GroupDashboard() {
                   <div className="card-header-row">
                     <h2 className="card-title">Members</h2>
                     <span className="badge">
-                      {members.length} {members.length === 1 ? "member" : "members"}
+                      {members.length}{" "}
+                      {members.length === 1 ? "member" : "members"}
                     </span>
                   </div>
 
@@ -362,7 +378,10 @@ export default function GroupDashboard() {
                         placeholder="student@example.com"
                         value={newMember.email}
                         onChange={(e) =>
-                          setNewMember((m) => ({ ...m, email: e.target.value }))
+                          setNewMember((m) => ({
+                            ...m,
+                            email: e.target.value,
+                          }))
                         }
                       />
                       <button type="submit" className="btn-primary-small">
@@ -380,13 +399,19 @@ export default function GroupDashboard() {
                             <div className="member-email">{m.email}</div>
                           )}
                         </div>
-                        <div className="member-role">Member</div>
-                        <button
-                          className="btn-danger-small"
-                          onClick={() => removeMember(m.id)}
-                        >
-                          Remove
-                        </button>
+
+                        <div className="member-role">
+                          {m.role || "Member"}
+                        </div>
+
+                        {isOwner && (
+                          <button
+                            className="btn-danger-small"
+                            onClick={() => removeMember(m.id)}
+                          >
+                            Remove
+                          </button>
+                        )}
                       </li>
                     ))}
 
@@ -409,13 +434,16 @@ export default function GroupDashboard() {
                     <div className="invite-code-big">
                       {group.invite_code || "———"}
                     </div>
-                    <button className="small-pill-btn" onClick={handleCopyInvite}>
+                    <button
+                      className="small-pill-btn"
+                      onClick={handleCopyInvite}
+                    >
                       Copy link
                     </button>
                   </div>
                   <p className="muted-text small">
                     Each new member will appear in the list on the right. You can
-                    remove them at any time.
+                    remove them at any time (admins only).
                   </p>
                 </div>
               </div>
@@ -434,7 +462,9 @@ export default function GroupDashboard() {
                   <div className="tasks-form-row">
                     <input
                       type="file"
-                      onChange={(e) => setSelectedFile(e.target.files[0] || null)}
+                      onChange={(e) =>
+                        setSelectedFile(e.target.files[0] || null)
+                      }
                     />
                     <button
                       type="submit"
@@ -558,7 +588,10 @@ export default function GroupDashboard() {
                       type="date"
                       value={newTask.due_date}
                       onChange={(e) =>
-                        setNewTask((t) => ({ ...t, due_date: e.target.value }))
+                        setNewTask((t) => ({
+                          ...t,
+                          due_date: e.target.value,
+                        }))
                       }
                     />
                     <select
@@ -583,7 +616,8 @@ export default function GroupDashboard() {
                     Overall progress
                     <strong>
                       {" "}
-                      {completedCount} / {totalTasks || 1} completed ({progressPercent}
+                      {completedCount} / {totalTasks || 1} completed (
+                      {progressPercent}
                       %)
                     </strong>
                   </div>
@@ -601,11 +635,14 @@ export default function GroupDashboard() {
                         <div>
                           <div className="task-title">{task.title}</div>
                           {task.description && (
-                            <div className="task-desc">{task.description}</div>
+                            <div className="task-desc">
+                              {task.description}
+                            </div>
                           )}
                           {task.due_date && (
                             <div className="task-meta">
-                              Due: {task.due_date} • {task.priority || "Normal"}
+                              Due: {task.due_date} •{" "}
+                              {task.priority || "Normal"}
                             </div>
                           )}
                         </div>
