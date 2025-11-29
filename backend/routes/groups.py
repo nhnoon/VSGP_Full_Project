@@ -31,7 +31,7 @@ def _generate_invite_code(length: int = 8) -> str:
 
 
 # -------------------- إنشاء قروب جديد --------------------
-@groups_bp.route("", methods=["POST"])
+@groups_bp.route("/", methods=["POST"])
 @jwt_required()
 def create_group():
     data = request.get_json() or {}
@@ -74,7 +74,7 @@ def create_group():
 
 
 # -------------------- عرض قروبات المستخدم --------------------
-@groups_bp.route("", methods=["GET"])
+@groups_bp.route("/", methods=["GET"])
 @jwt_required()
 def list_my_groups():
     user = current_user()
