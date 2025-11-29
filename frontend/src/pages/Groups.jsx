@@ -1,3 +1,4 @@
+// frontend/src/pages/Groups.jsx
 import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { authFetch } from "../utils/api";
@@ -24,6 +25,7 @@ export default function Groups() {
       setError("");
 
       try {
+        // أهم سطر: نستخدم /groups/ مع سلاش
         const res = await authFetch("/groups/", { method: "GET" });
         const data = await res.json().catch(() => ({}));
 
@@ -56,7 +58,6 @@ export default function Groups() {
     const groupObj = groups.find((g) => g.id === groupId);
 
     if (groupObj) {
-      // نرسل بيانات القروب (لو احتجنا role/isOwner)
       navigate(`/groups/${groupId}`, { state: { group: groupObj } });
     } else {
       navigate(`/groups/${groupId}`);
@@ -77,6 +78,7 @@ export default function Groups() {
     setCreating(true);
 
     try {
+      // برضه هنا /groups/ مع POST
       const res = await authFetch("/groups/", {
         method: "POST",
         body: JSON.stringify({ name }),
@@ -88,22 +90,18 @@ export default function Groups() {
         throw new Error(data.msg || "Failed to create group");
       }
 
-      // نبني object واضح للقروب الجديد
       const newGroup = {
         id: data.id || data.group_id,
         name: data.name || name,
         course_code: data.course_code,
         description: data.description,
-        // نعلّم في الواجهة إن اللي أنشأه هو المالك (owner/admin)
         isOwner: true,
         role: data.role || "admin",
       };
 
-      // نضيفه لقائمة القروبات في الواجهة
       setGroups((prev) => [...prev, newGroup]);
       setNewGroupName("");
 
-      // نروح لصفحة القروب ونرسل معها بياناته
       if (newGroup.id) {
         navigate(`/groups/${newGroup.id}`, { state: { group: newGroup } });
       }

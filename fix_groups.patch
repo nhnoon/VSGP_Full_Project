@@ -1,0 +1,134 @@
+diff --git a/backend/routes/groups.py b/backend/routes/groups.py
+index 1111111..2222222 100644
+--- a/backend/routes/groups.py
++++ b/backend/routes/groups.py
+@@ -1,16 +1,20 @@
+-# backend/routes/groups.py
+-from flask import Blueprint, request, jsonify
+-from flask_jwt_extended import jwt_required, get_jwt_identity
+-from app import db
+-from models.user import User
+-from models.group import Group
+-from models.group_member import GroupMember
+-
+-groups_bp = Blueprint("groups", __name__)
+-
+-def current_user():
+-    user_id = get_jwt_identity()
+-    return User.query.get(user_id)
++from flask import Blueprint, request, jsonify
++from flask_jwt_extended import jwt_required, get_jwt_identity
++
++# نستخدم db من ملف extensions
++from extensions import db
++
++from models.user import User
++from models.group import Group
++from models.group_member import GroupMember
++
++groups_bp = Blueprint("groups", __name__)
++
++
++def current_user():
++    """ارجاع المستخدم الحالي بناءً على الـ JWT"""
++    user_id = get_jwt_identity()
++    return User.query.get(user_id)
+@@ -19,12 +23,12 @@ def current_user():
+ # -------------------- إنشاء قروب جديد --------------------
+-@groups_bp.route("", methods=["POST"])
++@groups_bp.route("/", methods=["POST"])
+ @jwt_required()
+ def create_group():
+     data = request.get_json() or {}
+     name = data.get("name", "").strip()
+@@ -33,11 +37,11 @@ def create_group():
+     if not user:
+-        return jsonify({"message": "User not found"}), 404
++        return jsonify({"msg": "User not found"}), 404
+ 
+-    group = StudyGroup(name=name)
++    group = Group(name=name)
+     db.session.add(group)
+     db.session.flush()  # عشان نضمن group.id
+@@ -49,7 +53,7 @@ def create_group():
+     db.session.commit()
+ 
+     return jsonify({
+         "id": group.id,
+         "name": group.name,
+         "role": "admin"
+@@ -59,12 +63,12 @@ def create_group():
+ 
+ 
+ # -------------------- عرض قروبات المستخدم --------------------
+-@groups_bp.route("", methods=["GET"])
++@groups_bp.route("/", methods=["GET"])
+ @jwt_required()
+ def list_my_groups():
+     user = current_user()
+     if not user:
+-        return jsonify({"message": "User not found"}), 404
++        return jsonify({"msg": "User not found"}), 404
+ 
+     memberships = GroupMember.query.filter_by(user_id=user.id).all()
+@@ -79,15 +83,15 @@ def list_my_groups():
+ 
+ 
+ # -------------------- الانضمام لقروب --------------------
+ @groups_bp.route("/<int:group_id>/join", methods=["POST"])
+ @jwt_required()
+ def join_group(group_id):
+     user = current_user()
+     if not user:
+-        return jsonify({"message": "User not found"}), 404
++        return jsonify({"msg": "User not found"}), 404
+ 
+-    group = StudyGroup.query.get(group_id)
++    group = Group.query.get(group_id)
+     if not group:
+-        return jsonify({"message": "Group not found"}), 404
++        return jsonify({"msg": "Group not found"}), 404
+@@ -110,13 +114,13 @@ def join_group(group_id):
+ 
+ 
+ # -------------------- عرض الأعضاء داخل القروب --------------------
+ @groups_bp.route("/<int:group_id>/members", methods=["GET"])
+ @jwt_required()
+ def list_members(group_id):
+-    group = StudyGroup.query.get(group_id)
++    group = Group.query.get(group_id)
+     if not group:
+-        return jsonify({"message": "Group not found"}), 404
++        return jsonify({"msg": "Group not found"}), 404
+ 
+     memberships = GroupMember.query.filter_by(group_id=group.id).all()
+@@ -136,13 +140,13 @@ def list_members(group_id):
+ @groups_bp.route("/<int:group_id>/members/<int:user_id>", methods=["DELETE"])
+ @jwt_required()
+ def remove_member(group_id, user_id):
+     user = current_user()
+     if not user:
+-        return jsonify({"message": "User not found"}), 404
++        return jsonify({"msg": "User not found"}), 404
+ 
+@@ -152,16 +156,16 @@ def remove_member(group_id, user_id):
+         role="admin"
+     ).first()
+ 
+     if not admin_membership:
+-        return jsonify({"message": "Only admins can remove members"}), 403
++        return jsonify({"msg": "Only admins can remove members"}), 403
+ 
+@@ -170,9 +174,9 @@ def remove_member(group_id, user_id):
+         group_id=group_id, user_id=user_id
+     ).first()
+ 
+     if not membership:
+-        return jsonify({"message": "Member not found in this group"}), 404
++        return jsonify({"msg": "Member not found in this group"}), 404
+ 
+     db.session.delete(membership)
+     db.session.commit()
+ 
+-    return jsonify({"message": "Member removed"}), 200
++    return jsonify({"msg": "Member removed"}), 200
