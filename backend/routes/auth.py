@@ -49,7 +49,6 @@ def register():
 
     return jsonify({"msg": "Account created"}), 201
 
-
 @auth_bp.post("/login")
 def login():
     """تسجيل دخول وإرجاع JWT"""
@@ -65,7 +64,8 @@ def login():
     if not user or not check_password_hash(user.password_hash, password):
         return jsonify({"msg": "Invalid email or password"}), 401
 
-    access_token = create_access_token(identity=user.id)
+    # مهم: الـ identity لازم يكون string
+    access_token = create_access_token(identity=str(user.id))
 
     return jsonify(
         {
