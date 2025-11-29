@@ -12,7 +12,7 @@ export default function Groups() {
 
   const navigate = useNavigate();
 
-  // تحميل القروبات بعد تسجيل الدخول
+  // load user groups after login
   useEffect(() => {
     const token = localStorage.getItem("vsgp_token");
     if (!token) {
@@ -20,17 +20,20 @@ export default function Groups() {
       return;
     }
 
-    const loadGroups = async () => {
+    async function loadGroups() {
       setLoading(true);
       setError("");
 
       try {
-        // أهم سطر: نستخدم /groups/ مع سلاش
         const res = await authFetch("/groups/", { method: "GET" });
         const data = await res.json().catch(() => ({}));
 
         if (!res.ok) {
-          throw new Error(data.msg || "Failed to load groups");
+          throw new Error(
+            typeof data.msg === "string"
+              ? data.msg
+              : "Failed to load groups"
+          );
         }
 
         if (Array.isArray(data)) {
@@ -46,25 +49,16 @@ export default function Groups() {
       } finally {
         setLoading(false);
       }
-    };
+    }
 
     loadGroups();
   }, [navigate]);
 
-  // فتح صفحة القروب
-  const handleOpenGroup = (groupId) => {
+  const handleOpenGroup = (groupId, groupObj) => {
     if (!groupId) return;
-
-    const groupObj = groups.find((g) => g.id === groupId);
-
-    if (groupObj) {
-      navigate(`/groups/${groupId}`, { state: { group: groupObj } });
-    } else {
-      navigate(`/groups/${groupId}`);
-    }
+    navigate(`/groups/${groupId}`, { state: { group: groupObj } });
   };
 
-  // إنشاء قروب جديد
   const handleCreateGroup = async (e) => {
     e.preventDefault();
     setError("");
@@ -78,7 +72,6 @@ export default function Groups() {
     setCreating(true);
 
     try {
-      // برضه هنا /groups/ مع POST
       const res = await authFetch("/groups/", {
         method: "POST",
         body: JSON.stringify({ name }),
@@ -87,16 +80,19 @@ export default function Groups() {
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        throw new Error(data.msg || "Failed to create group");
+        throw new Error(
+          typeof data.msg === "string"
+            ? data.msg
+            : "Failed to create group"
+        );
       }
 
       const newGroup = {
-        id: data.id || data.group_id,
+        id: data.id,
         name: data.name || name,
-        course_code: data.course_code,
-        description: data.description,
-        isOwner: true,
+        invite_code: data.invite_code,
         role: data.role || "admin",
+        isOwner: data.is_owner ?? true,
       };
 
       setGroups((prev) => [...prev, newGroup]);
@@ -121,7 +117,7 @@ export default function Groups() {
       </div>
 
       <div className="groups-content">
-        {/* كرت إنشاء قروب جديد */}
+        {/* Create group card */}
         <div className="groups-create-card">
           <h2>Create a new group</h2>
           <form onSubmit={handleCreateGroup} className="groups-create-form">
@@ -132,14 +128,18 @@ export default function Groups() {
               onChange={(e) => setNewGroupName(e.target.value)}
               className="groups-input"
             />
-            <button type="submit" disabled={creating} className="groups-button">
+            <button
+              type="submit"
+              disabled={creating}
+              className="groups-button"
+            >
               {creating ? "Creating..." : "Create group"}
             </button>
           </form>
           {error && <div className="groups-error">{error}</div>}
         </div>
 
-        {/* قائمة القروبات */}
+        {/* Groups list */}
         <div className="groups-list-card">
           <h2>Your groups</h2>
 
@@ -153,16 +153,20 @@ export default function Groups() {
                 <li
                   key={g.id}
                   className="groups-item"
-                  onClick={() => handleOpenGroup(g.id)}
+                  onClick={() => handleOpenGroup(g.id, g)}
                 >
                   <div className="groups-item-main">
                     <h3>{g.name}</h3>
-                    {g.course_code && (
-                      <span className="groups-tag">{g.course_code}</span>
+                    {g.role && (
+                      <span className="groups-tag">
+                        {g.role === "admin" ? "Admin" : "Member"}
+                      </span>
                     )}
                   </div>
-                  {g.description && (
-                    <p className="groups-item-desc">{g.description}</p>
+                  {g.invite_code && (
+                    <p className="groups-item-desc">
+                      Invite code: {g.invite_code}
+                    </p>
                   )}
                 </li>
               ))}
