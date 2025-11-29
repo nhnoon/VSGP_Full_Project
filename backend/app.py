@@ -1,16 +1,13 @@
-# backend/app.py
-
 from flask import Flask
 from flask_cors import CORS
-from flask_sqlalchemy import SQLAlchemy
+from flask_sqlalchemy import SQLAlchemy   # يمكننا حذفه الآن لكن خليه مؤقتاً
 from flask_jwt_extended import JWTManager
 from dotenv import load_dotenv
 from sqlalchemy import text
 import os
 
-# نجهز الـ extensions
-db = SQLAlchemy()
-jwt = JWTManager()
+# 👇 استخدمي الـ db و jwt من extensions بدل ما نعرّفهم هنا
+from extensions import db, jwt
 
 
 def create_app():
@@ -46,7 +43,7 @@ def create_app():
 
     # استيراد الموديلات حتى تُعرّف الجداول
     from models.user import User          # noqa: F401
-    from models.group import StudyGroup   # noqa: F401
+    from models.group import Group   # noqa: F401
     from models.task import Task          # noqa: F401
     from models.file import GroupFile     # noqa: F401
 
@@ -61,10 +58,8 @@ def create_app():
 
     # إنشاء الجداول + تهيئة البيانات
     with app.app_context():
-        # إنشاء الجداول في قاعدة البيانات
         db.create_all()
 
-        # إنشاء جدول الرسائل لو مو موجود
         db.session.execute(text("""
             CREATE TABLE IF NOT EXISTS messages (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -74,8 +69,6 @@ def create_app():
             )
         """))
 
-        # ===== إنشاء مستخدم افتراضي للدخول من Vercel / أي مكان =====
-        # تقدرين تغيّرين الإيميل والباسورد من هنا أو من متغيرات البيئة
         default_email = os.getenv("DEFAULT_ADMIN_EMAIL", "noon@test.com")
         default_password = os.getenv("DEFAULT_ADMIN_PASSWORD", "password123")
 
@@ -86,28 +79,21 @@ def create_app():
                 email=default_email,
             )
 
-            # لو عندك method اسمها set_password نستخدمها
             if hasattr(user, "set_password"):
                 user.set_password(default_password)
             else:
-                # محاولة التعامل مع الحقول الشائعة لو ما فيه set_password
-                try:
-                    from werkzeug.security import generate_password_hash
-                    pw_hash = generate_password_hash(default_password)
+                from werkzeug.security import generate_password_hash
+                pw_hash = generate_password_hash(default_password)
 
-                    if hasattr(user, "password_hash"):
-                        user.password_hash = pw_hash
-                    elif hasattr(user, "password"):
-                        user.password = pw_hash
-                except Exception:
-                    # لو ما عرفنا نعمل هاش نخليه زي ما هو (أسوأ الأحوال)
-                    pass
+                if hasattr(user, "password_hash"):
+                    user.password_hash = pw_hash
+                elif hasattr(user, "password"):
+                    user.password = pw_hash
 
             db.session.add(user)
 
         db.session.commit()
 
-    # مسار بسيط لفحص أن الباك إند شغال
     @app.get("/health")
     def health():
         return {"ok": True}
@@ -115,10 +101,9 @@ def create_app():
     return app
 
 
-# ربط الـ JWT بالمستخدم عشان @jwt_required ترجع لنا الـ current_user
 @jwt.user_lookup_loader
 def load_user_callback(_jwt_header, jwt_data):
-    from models.user import User  # استيراد هنا لتجنب الدوران
+    from models.user import User
     identity = jwt_data.get("sub")
     try:
         user_id = int(identity)

@@ -3,7 +3,8 @@ from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 from app import db
 from models.user import User
-from models.group import StudyGroup, GroupMember
+from models.group import Group
+from models.group_member import GroupMember
 
 groups_bp = Blueprint("groups", __name__)
 
