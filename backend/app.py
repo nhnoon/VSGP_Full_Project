@@ -50,32 +50,47 @@ def create_app():
     from routes.groups import groups_bp
     from routes.messages import messages_bp
     from routes.tasks import tasks_bp
-   
 
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(groups_bp, url_prefix="/groups")
     app.register_blueprint(messages_bp, url_prefix="/groups")
     app.register_blueprint(tasks_bp, url_prefix="/groups")
 
-
+    # ---------- DB init & seed ----------
     with app.app_context():
+        # نحذف قاعدة بيانات SQLite القديمة لو كنا نستخدم sqlite:///
+        db_uri = app.config["SQLALCHEMY_DATABASE_URI"]
+        if db_uri.startswith("sqlite:///"):
+            # استخراج المسار الفعلي للملف
+            db_path = db_uri.replace("sqlite:///", "", 1)
+            if not os.path.isabs(db_path):
+                db_path = os.path.join(os.path.dirname(__file__), db_path)
+
+            if os.path.exists(db_path):
+                try:
+                    os.remove(db_path)
+                except OSError:
+                    # لو ما قدر يحذفها نكمل عادي
+                    pass
+
+        # إنشاء الجداول من جديد
         db.create_all()
 
-        # simple messages table if not exists (for chat)
+        # جدول الرسائل البسيط (للدردشة)
         db.session.execute(
             text(
                 """
-            CREATE TABLE IF NOT EXISTS messages (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                group_id INTEGER NOT NULL,
-                content TEXT NOT NULL,
-                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-            )
-        """
+                CREATE TABLE IF NOT EXISTS messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    group_id INTEGER NOT NULL,
+                    content TEXT NOT NULL,
+                    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                )
+                """
             )
         )
 
-        # ---------- default admin user ----------
+        # إنشاء مستخدم افتراضي
         from werkzeug.security import generate_password_hash
 
         default_email = os.getenv("DEFAULT_ADMIN_EMAIL", "noon@test.com")
@@ -86,7 +101,8 @@ def create_app():
             pw_hash = generate_password_hash(default_password)
             user = User(name="Noon", email=default_email, password_hash=pw_hash)
             db.session.add(user)
-            db.session.commit()
+
+        db.session.commit()
 
     @app.get("/health")
     def health():
