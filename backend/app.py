@@ -1,4 +1,3 @@
-# backend/app.py
 import os
 from dotenv import load_dotenv
 from flask import Flask
@@ -9,43 +8,49 @@ from extensions import db, jwt
 
 
 def create_app():
-    # load .env
+    # تحميل المتغيرات من .env
     load_dotenv()
 
     app = Flask(__name__)
 
-    # ---------- DB ----------
+    # ---------- إعداد قاعدة البيانات ----------
     app.config["SQLALCHEMY_DATABASE_URI"] = os.getenv(
         "DATABASE_URL", "sqlite:///vsgp.db"
     )
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-    # ---------- JWT ----------
+    # ---------- إعداد JWT ----------
     app.config["JWT_SECRET_KEY"] = os.getenv("SECRET_KEY", "dev-secret")
     app.config["JWT_TOKEN_LOCATION"] = ["headers"]
     app.config["JWT_HEADER_TYPE"] = "Bearer"
     app.config["JWT_COOKIE_CSRF_PROTECT"] = False
 
-    # ---------- Uploads ----------
+    # ---------- رفع الملفات ----------
     upload_folder = os.path.join(os.path.dirname(__file__), "uploads")
     app.config["UPLOAD_FOLDER"] = upload_folder
     os.makedirs(upload_folder, exist_ok=True)
 
-    # ---------- CORS ----------
-    CORS(app, resources={r"/*": {"origins": "*"}}, supports_credentials=True)
+    # ---------- CORS (مهم جداً للواجهة الأمامية) ----------
+    app.config["CORS_HEADERS"] = "Content-Type, Authorization"
 
-    # init extensions
+    CORS(
+        app,
+        resources={r"/*": {"origins": "*"}},
+        supports_credentials=True,
+    )
+
+    # ---------- تفعيل الإضافات ----------
     db.init_app(app)
     jwt.init_app(app)
 
-    # important: import models so SQLAlchemy sees them
+    # ---------- استيراد الـ models ----------
     from models.user import User  # noqa: F401
     from models.group import Group  # noqa: F401
     from models.group_member import GroupMember  # noqa: F401
     from models.task import Task  # noqa: F401
     from models.file import GroupFile  # noqa: F401
 
-    # blueprints
+    # ---------- استيراد المسارات ----------
     from routes.auth import auth_bp
     from routes.groups import groups_bp
     from routes.messages import messages_bp
@@ -56,13 +61,14 @@ def create_app():
     app.register_blueprint(messages_bp, url_prefix="/groups")
     app.register_blueprint(tasks_bp, url_prefix="/groups")
 
-    # ---------- DB init & seed ----------
+    # ---------- تهيئة قاعدة البيانات ----------
     with app.app_context():
-        # نحذف قاعدة بيانات SQLite القديمة لو كنا نستخدم sqlite:///
         db_uri = app.config["SQLALCHEMY_DATABASE_URI"]
-        if db_uri.startswith("sqlite:///"):
-            # استخراج المسار الفعلي للملف
+
+        # ❗ لا نحذف قاعدة البيانات إلا في بيئة التطوير فقط
+        if db_uri.startswith("sqlite:///") and os.getenv("FLASK_ENV") == "development":
             db_path = db_uri.replace("sqlite:///", "", 1)
+
             if not os.path.isabs(db_path):
                 db_path = os.path.join(os.path.dirname(__file__), db_path)
 
@@ -70,13 +76,12 @@ def create_app():
                 try:
                     os.remove(db_path)
                 except OSError:
-                    # لو ما قدر يحذفها نكمل عادي
                     pass
 
-        # إنشاء الجداول من جديد
+        # إنشاء الجداول
         db.create_all()
 
-        # جدول الرسائل البسيط (للدردشة)
+        # إنشاء جدول الرسائل إذا لم يكن موجوداً
         db.session.execute(
             text(
                 """
@@ -90,7 +95,7 @@ def create_app():
             )
         )
 
-        # إنشاء مستخدم افتراضي
+        # ---------- إنشاء مستخدم افتراضي ----------
         from werkzeug.security import generate_password_hash
 
         default_email = os.getenv("DEFAULT_ADMIN_EMAIL", "noon@test.com")
@@ -104,6 +109,7 @@ def create_app():
 
         db.session.commit()
 
+    # ---------- Health check ----------
     @app.get("/health")
     def health():
         return {"ok": True}
@@ -111,6 +117,7 @@ def create_app():
     return app
 
 
+# ---------- JWT User Loader ----------
 @jwt.user_lookup_loader
 def load_user_callback(_jwt_header, jwt_data):
     from models.user import User

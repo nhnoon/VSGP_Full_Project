@@ -1,6 +1,10 @@
 // src/utils/api.js
-export const API_BASE =
-  import.meta.env.VITE_API_BASE || "http://127.0.0.1:5000";
+
+ 
+  // src/utils/api.js
+export const API_BASE = "https://vsgp-full-project-2.onrender.com";
+
+
 
 export async function authFetch(path, options = {}) {
   const token = localStorage.getItem("vsgp_token");
