@@ -11,6 +11,8 @@ from models.user import User
 tasks_bp = Blueprint("tasks", __name__)
 
 
+# ------------ Helpers ------------
+
 def get_current_user():
     uid = get_jwt_identity()
     if not uid:
@@ -23,9 +25,10 @@ def user_in_group(user_id, group_id):
     return GroupMember.query.filter_by(
         user_id=user_id, group_id=group_id
     ).first()
-    
 
-# ---------- جلب كل التاسكات في القروب ----------
+
+# ------------ List tasks ------------
+
 @tasks_bp.route("/<int:group_id>/tasks", methods=["GET"])
 @jwt_required()
 def list_tasks(group_id):
@@ -42,21 +45,25 @@ def list_tasks(group_id):
 
     tasks = Task.query.filter_by(group_id=group.id).order_by(Task.id.asc()).all()
 
-    return jsonify([
-        {
-            "id": t.id,
-            "group_id": t.group_id,
-            "title": t.title,
-            "description": t.description,
-            "due_date": t.due_date,
-            "priority": t.priority,
-            "completed": t.completed,
-        }
-        for t in tasks
-    ]), 200
+    result = []
+    for t in tasks:
+        result.append(
+            {
+                "id": t.id,
+                "group_id": getattr(t, "group_id", group.id),
+                "title": getattr(t, "title", ""),
+                "description": getattr(t, "description", ""),
+                "due_date": getattr(t, "due_date", None),
+                "priority": getattr(t, "priority", "Normal"),
+                "completed": bool(getattr(t, "completed", False)),
+            }
+        )
+
+    return jsonify(result), 200
 
 
-# ---------- إضافة تاسك جديد ----------
+# ------------ Create task ------------
+
 @tasks_bp.route("/<int:group_id>/tasks", methods=["POST"])
 @jwt_required()
 def create_task(group_id):
@@ -72,37 +79,60 @@ def create_task(group_id):
         return jsonify({"msg": "You are not a member of this group"}), 403
 
     data = request.get_json() or {}
+
     title = (data.get("title") or "").strip()
     description = (data.get("description") or "").strip()
-    due_date = (data.get("due_date") or "").strip()
-    priority = (data.get("priority") or "Normal").strip() or "Normal"
+    due_date_raw = (data.get("due_date") or "").strip()
+    priority_raw = (data.get("priority") or "").strip()
 
     if not title:
         return jsonify({"msg": "Title is required"}), 400
 
-    task = Task(
-        group_id=group.id,
-        title=title,
-        description=description,
-        due_date=due_date,
-        priority=priority,
-        completed=False,
+    # لو التاريخ فاضي نخليه None (مهم لـ PostgreSQL)
+    due_date = due_date_raw or None
+    priority = priority_raw or "Normal"
+
+    try:
+        # ننشئ الكائن بأبسط شيء، وبعدين نضبط الحقول اللي موجودة بالفعل في الموديل
+        task = Task()
+        if hasattr(task, "group_id"):
+            task.group_id = group.id
+        if hasattr(task, "title"):
+            task.title = title
+        if hasattr(task, "description"):
+            task.description = description
+        if hasattr(task, "due_date"):
+            task.due_date = due_date
+        if hasattr(task, "priority"):
+            task.priority = priority
+        if hasattr(task, "completed"):
+            task.completed = False
+
+        db.session.add(task)
+        db.session.commit()
+    except Exception as e:
+        db.session.rollback()
+        # نرجّع الرسالة عشان لو صار خطأ ثاني نقدر نفهمه من الفرونت
+        return jsonify({"msg": f"Error creating task: {str(e)}"}), 500
+
+    return (
+        jsonify(
+            {
+                "id": task.id,
+                "group_id": getattr(task, "group_id", group.id),
+                "title": getattr(task, "title", title),
+                "description": getattr(task, "description", description),
+                "due_date": getattr(task, "due_date", due_date),
+                "priority": getattr(task, "priority", priority),
+                "completed": bool(getattr(task, "completed", False)),
+            }
+        ),
+        201,
     )
-    db.session.add(task)
-    db.session.commit()
-
-    return jsonify({
-        "id": task.id,
-        "group_id": task.group_id,
-        "title": task.title,
-        "description": task.description,
-        "due_date": task.due_date,
-        "priority": task.priority,
-        "completed": task.completed,
-    }), 201
 
 
-# ---------- تعديل حالة التاسك (مكتمل / غير مكتمل) أو أي حقل ----------
+# ------------ Update task ------------
+
 @tasks_bp.route("/<int:group_id>/tasks/<int:task_id>", methods=["PATCH"])
 @jwt_required()
 def update_task(group_id, task_id):
@@ -117,37 +147,51 @@ def update_task(group_id, task_id):
     if not user_in_group(user.id, group.id):
         return jsonify({"msg": "You are not a member of this group"}), 403
 
-    task = Task.query.filter_by(id=task_id, group_id=group.id).first()
+    task = Task.query.filter_by(id=task_id).first()
     if not task:
         return jsonify({"msg": "Task not found"}), 404
 
     data = request.get_json() or {}
 
-    if "completed" in data:
+    if "completed" in data and hasattr(task, "completed"):
         task.completed = bool(data["completed"])
-    if "title" in data:
-        task.title = (data["title"] or "").strip() or task.title
-    if "description" in data:
+
+    if "title" in data and hasattr(task, "title"):
+        new_title = (data["title"] or "").strip()
+        if new_title:
+            task.title = new_title
+
+    if "description" in data and hasattr(task, "description"):
         task.description = (data["description"] or "").strip()
-    if "due_date" in data:
-        task.due_date = (data["due_date"] or "").strip()
-    if "priority" in data:
-        task.priority = (data["priority"] or "").strip() or task.priority
+
+    if "due_date" in data and hasattr(task, "due_date"):
+        raw = (data["due_date"] or "").strip()
+        task.due_date = raw or None
+
+    if "priority" in data and hasattr(task, "priority"):
+        raw = (data["priority"] or "").strip()
+        task.priority = raw or task.priority
 
     db.session.commit()
 
-    return jsonify({
-        "id": task.id,
-        "group_id": task.group_id,
-        "title": task.title,
-        "description": task.description,
-        "due_date": task.due_date,
-        "priority": task.priority,
-        "completed": task.completed,
-    }), 200
+    return (
+        jsonify(
+            {
+                "id": task.id,
+                "group_id": getattr(task, "group_id", group_id),
+                "title": getattr(task, "title", ""),
+                "description": getattr(task, "description", ""),
+                "due_date": getattr(task, "due_date", None),
+                "priority": getattr(task, "priority", "Normal"),
+                "completed": bool(getattr(task, "completed", False)),
+            }
+        ),
+        200,
+    )
 
 
-# ---------- حذف تاسك ----------
+# ------------ Delete task ------------
+
 @tasks_bp.route("/<int:group_id>/tasks/<int:task_id>", methods=["DELETE"])
 @jwt_required()
 def delete_task(group_id, task_id):
@@ -162,7 +206,7 @@ def delete_task(group_id, task_id):
     if not user_in_group(user.id, group.id):
         return jsonify({"msg": "You are not a member of this group"}), 403
 
-    task = Task.query.filter_by(id=task_id, group_id=group.id).first()
+    task = Task.query.filter_by(id=task_id).first()
     if not task:
         return jsonify({"msg": "Task not found"}), 404
 
