@@ -1,6 +1,6 @@
 # backend/routes/groups.py
 
-from flask import Blueprint, request, jsonify, current_app
+from flask import Blueprint, request, jsonify
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from extensions import db
@@ -18,7 +18,7 @@ import string
 groups_bp = Blueprint("groups", __name__)
 
 
-# ---------- Helpers ----------
+# ------------ Helpers ------------
 
 def generate_invite_code(length: int = 8) -> str:
     """ينشئ كود دعوة عشوائي مثل: PPRQYJKW"""
@@ -34,11 +34,11 @@ def get_current_user():
 
 
 def get_membership(user_id: int, group_id: int):
-    """يرجع سجل العضوية GroupMember لو المستخدم عضو في القروب"""
+    """يرجع سجل العضوية لو المستخدم عضو في القروب"""
     return GroupMember.query.filter_by(user_id=user_id, group_id=group_id).first()
 
 
-# ---------- Groups list & create ----------
+# ------------ Groups list & create ------------
 
 @groups_bp.route("", methods=["GET"])
 @jwt_required()
@@ -48,23 +48,31 @@ def list_groups():
     if not user:
         return jsonify({"msg": "User not found"}), 404
 
-    memberships = (
-        GroupMember.query.filter_by(user_id=user.id)
+    # نستخدم JOIN صريح بدل الاعتماد على relationship
+    rows = (
+        db.session.query(GroupMember, Group)
         .join(Group, GroupMember.group_id == Group.id)
+        .filter(GroupMember.user_id == user.id)
         .all()
     )
 
     results = []
-    for m in memberships:
-        g = m.group  # يفترض وجود relationship في الموديل
+    for gm, g in rows:
+        # نحسب عدد الأعضاء لكل قروب (اختياري)
+        members_count = (
+            db.session.query(GroupMember)
+            .filter_by(group_id=g.id)
+            .count()
+        )
         results.append(
             {
                 "id": g.id,
                 "name": g.name,
                 "invite_code": g.invite_code,
-                "role": m.role or "member",
+                "members_count": members_count,
+                "role": gm.role or "member",
                 "is_owner": bool(
-                    m.role == "admin" or getattr(g, "owner_id", None) == user.id
+                    (gm.role == "admin") or (getattr(g, "owner_id", None) == user.id)
                 ),
             }
         )
@@ -90,7 +98,7 @@ def create_group():
     group = Group(
         name=name,
         invite_code=invite_code,
-        owner_id=user.id,
+        owner_id=getattr(user, "id", None),
     )
     db.session.add(group)
     db.session.flush()  # عشان group.id
@@ -109,6 +117,7 @@ def create_group():
                 "id": group.id,
                 "name": group.name,
                 "invite_code": group.invite_code,
+                "members_count": 1,
                 "role": gm.role,
                 "is_owner": True,
             }
@@ -117,7 +126,7 @@ def create_group():
     )
 
 
-# ---------- Group details ----------
+# ------------ Group details ------------
 
 @groups_bp.route("/<int:group_id>", methods=["GET"])
 @jwt_required()
@@ -145,8 +154,8 @@ def get_group(group_id):
                 "invite_code": group.invite_code,
                 "members_count": members_count,
                 "is_owner": bool(
-                    membership.role == "admin"
-                    or getattr(group, "owner_id", None) == user.id
+                    (membership.role == "admin")
+                    or (getattr(group, "owner_id", None) == user.id)
                 ),
             }
         ),
@@ -154,7 +163,7 @@ def get_group(group_id):
     )
 
 
-# ---------- Join by invite code ----------
+# ------------ Join by invite code ------------
 
 @groups_bp.route("/join", methods=["POST"])
 @jwt_required()
@@ -198,7 +207,7 @@ def join_group():
     )
 
 
-# ---------- Members ----------
+# ------------ Members ------------
 
 @groups_bp.route("/<int:group_id>/members", methods=["GET"])
 @jwt_required()
@@ -216,17 +225,22 @@ def list_members(group_id):
     if not membership:
         return jsonify({"msg": "You are not a member of this group"}), 403
 
-    members = GroupMember.query.filter_by(group_id=group.id).all()
+    # JOIN على User بدل الاعتماد على relationship
+    rows = (
+        db.session.query(GroupMember, User)
+        .join(User, GroupMember.user_id == User.id)
+        .filter(GroupMember.group_id == group.id)
+        .all()
+    )
 
     results = []
-    for m in members:
-        u = m.user  # يفترض وجود relationship في الموديل
+    for gm, u in rows:
         results.append(
             {
-                "id": m.id,  # ID حق العضوية (الفرونت يستعمله للحذف)
+                "id": gm.id,  # ID حق العضوية (الفرونت يستخدمه للحذف)
                 "name": u.name,
                 "email": u.email,
-                "role": m.role or "member",
+                "role": gm.role or "member",
             }
         )
 
@@ -236,7 +250,7 @@ def list_members(group_id):
 @groups_bp.route("/<int:group_id>/members", methods=["POST"])
 @jwt_required()
 def add_member(group_id):
-    """إضافة عضو جديد للقروب مع إنشاء User بباسوورد عشوائي مشفّر لو احتجنا"""
+    """إضافة عضو جديد للقروب مع إنشاء User بباسورد عشوائي مشفّر لو احتجنا"""
     current_user = get_current_user()
     if not current_user:
         return jsonify({"msg": "User not found"}), 404
@@ -256,18 +270,23 @@ def add_member(group_id):
     if not name:
         return jsonify({"msg": "Name is required"}), 400
 
-    # نحاول نلقى مستخدم بنفس الإيميل لو موجود
+    # نبحث عن مستخدم بنفس الإيميل لو موجود
     user = None
     if email:
         user = User.query.filter_by(email=email).first()
 
-    # لو ما فيه مستخدم → ننشئه بباسوورد عشوائي (مشفر)
+    # لو ما وجدناه → ننشئ User جديد بباسورد عشوائي مشفّر
     if not user:
         random_password = secrets.token_hex(8)
         pw_hash = generate_password_hash(random_password)
-        user = User(name=name, email=email or None, password_hash=pw_hash)
+
+        user = User(
+            name=name,
+            email=email or None,
+            password_hash=pw_hash,
+        )
         db.session.add(user)
-        db.session.flush()  # للحصول على user.id
+        db.session.flush()  # عشان user.id
 
     # نتأكد أنه مو مضاف من قبل
     already = GroupMember.query.filter_by(group_id=group.id, user_id=user.id).first()
@@ -317,7 +336,7 @@ def remove_member(group_id, member_id):
     return jsonify({"msg": "Member removed"}), 200
 
 
-# ---------- Files (قراءة فقط حالياً) ----------
+# ------------ Files (read-only حالياً) ------------
 
 @groups_bp.route("/<int:group_id>/files", methods=["GET"])
 @jwt_required()
