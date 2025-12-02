@@ -1,6 +1,6 @@
 # backend/routes/groups.py
 
-from flask import Blueprint, request, jsonify
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from extensions import db
@@ -48,7 +48,6 @@ def list_groups():
     if not user:
         return jsonify({"msg": "User not found"}), 404
 
-    # نستخدم JOIN صريح بدل الاعتماد على relationship
     rows = (
         db.session.query(GroupMember, Group)
         .join(Group, GroupMember.group_id == Group.id)
@@ -58,7 +57,6 @@ def list_groups():
 
     results = []
     for gm, g in rows:
-        # نحسب عدد الأعضاء لكل قروب (اختياري)
         members_count = (
             db.session.query(GroupMember)
             .filter_by(group_id=g.id)
@@ -225,7 +223,6 @@ def list_members(group_id):
     if not membership:
         return jsonify({"msg": "You are not a member of this group"}), 403
 
-    # JOIN على User بدل الاعتماد على relationship
     rows = (
         db.session.query(GroupMember, User)
         .join(User, GroupMember.user_id == User.id)
@@ -237,7 +234,7 @@ def list_members(group_id):
     for gm, u in rows:
         results.append(
             {
-                "id": gm.id,  # ID حق العضوية (الفرونت يستخدمه للحذف)
+                "id": gm.id,
                 "name": u.name,
                 "email": u.email,
                 "role": gm.role or "member",
@@ -270,12 +267,10 @@ def add_member(group_id):
     if not name:
         return jsonify({"msg": "Name is required"}), 400
 
-    # نبحث عن مستخدم بنفس الإيميل لو موجود
     user = None
     if email:
         user = User.query.filter_by(email=email).first()
 
-    # لو ما وجدناه → ننشئ User جديد بباسورد عشوائي مشفّر
     if not user:
         random_password = secrets.token_hex(8)
         pw_hash = generate_password_hash(random_password)
@@ -288,7 +283,6 @@ def add_member(group_id):
         db.session.add(user)
         db.session.flush()  # عشان user.id
 
-    # نتأكد أنه مو مضاف من قبل
     already = GroupMember.query.filter_by(group_id=group.id, user_id=user.id).first()
     if already:
         return jsonify({"msg": "Member already in this group"}), 400
@@ -336,7 +330,7 @@ def remove_member(group_id, member_id):
     return jsonify({"msg": "Member removed"}), 200
 
 
-# ------------ Files (read-only حالياً) ------------
+# ------------ Files ------------
 
 @groups_bp.route("/<int:group_id>/files", methods=["GET"])
 @jwt_required()
@@ -368,3 +362,63 @@ def list_files(group_id):
         )
 
     return jsonify(results), 200
+
+
+@groups_bp.route("/<int:group_id>/files", methods=["POST"])
+@jwt_required()
+def upload_file(group_id):
+    """رفع ملف جديد للقروب"""
+    user = get_current_user()
+    if not user:
+        return jsonify({"msg": "User not found"}), 404
+
+    group = Group.query.get(group_id)
+    if not group:
+        return jsonify({"msg": "Group not found"}), 404
+
+    membership = get_membership(user.id, group.id)
+    if not membership:
+        return jsonify({"msg": "You are not a member of this group"}), 403
+
+    if "file" not in request.files:
+        return jsonify({"msg": "No file provided"}), 400
+
+    file = request.files["file"]
+    if file.filename == "":
+        return jsonify({"msg": "Empty filename"}), 400
+
+    original_name = secure_filename(file.filename)
+
+    # نضيف suffix عشوائي لتفادي تكرار الأسماء
+    random_suffix = secrets.token_hex(4)
+    stored_name = f"{group.id}_{random_suffix}_{original_name}"
+
+    upload_folder = current_app.config.get("UPLOAD_FOLDER", "uploads")
+    os.makedirs(upload_folder, exist_ok=True)
+
+    save_path = os.path.join(upload_folder, stored_name)
+    file.save(save_path)
+
+    # حفظ في قاعدة البيانات
+    gf = GroupFile(group_id=group.id, filename=stored_name)
+    if hasattr(gf, "original_name"):
+        gf.original_name = original_name
+    if hasattr(gf, "name"):
+        gf.name = original_name
+
+    db.session.add(gf)
+    db.session.commit()
+
+    return (
+        jsonify(
+            {
+                "id": gf.id,
+                "group_id": gf.group_id,
+                "name": getattr(gf, "name", None)
+                or getattr(gf, "original_name", None)
+                or original_name,
+                "filename": gf.filename,
+            }
+        ),
+        201,
+    )
