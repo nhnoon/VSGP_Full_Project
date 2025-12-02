@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 from flask import Flask
 from flask_cors import CORS
-from sqlalchemy import text
+from sqlalchemy import text 
 
 from extensions import db, jwt
 
@@ -53,13 +53,14 @@ def create_app():
     from routes.auth import auth_bp
     from routes.groups import groups_bp
     from routes.messages import messages_bp
-    from routes.tasks import tasks_bp
+    from routes.tasks import tasks_bp 
+    from routes.files import files_bp 
 
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(groups_bp, url_prefix="/groups")
     app.register_blueprint(messages_bp, url_prefix="/groups")
     app.register_blueprint(tasks_bp, url_prefix="/groups")
-
+    app.register_blueprint(files_bp, url_prefix="/groups") 
     # محاولة ربط بلوبرنت الملفات لو موجود (ما يطيّح السيرفر لو ناقص)
     try:
         from routes.files import files_bp
