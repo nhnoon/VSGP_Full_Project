@@ -1,7 +1,3 @@
-// src/utils/api.js
-
- 
-  // src/utils/api.js
 export const API_BASE = "https://vsgp-full-project-2.onrender.com";
 
 
