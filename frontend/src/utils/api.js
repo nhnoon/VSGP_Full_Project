@@ -1,4 +1,5 @@
-export const API_BASE = "https://vsgp-full-project.onrender.com";
+export const API_BASE_URL = "https://vsgp-full-project.onrender.com";
+
 
 
 
