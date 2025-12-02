@@ -1,26 +1,31 @@
 # backend/routes/groups.py
-from flask import Blueprint, request, jsonify
+
+from flask import Blueprint, request, jsonify, current_app
 from flask_jwt_extended import jwt_required, get_jwt_identity
 
 from extensions import db
 from models.user import User
 from models.group import Group
 from models.group_member import GroupMember
-import string
-import secrets
+from models.file import GroupFile
 
-# ---------- إعداد الـ Blueprint ----------
+from werkzeug.utils import secure_filename
+from werkzeug.security import generate_password_hash
+import os
+import secrets
+import string
+
 groups_bp = Blueprint("groups", __name__)
 
 
-# ---------- توليد كود الدعوة ----------
-def generate_invite_code(length=8):
+# ---------- Helpers ----------
+
+def generate_invite_code(length: int = 8) -> str:
     """ينشئ كود دعوة عشوائي مثل: PPRQYJKW"""
     alphabet = string.ascii_uppercase + string.digits
     return "".join(secrets.choice(alphabet) for _ in range(length))
 
 
-# ---------- الحصول على المستخدم الحالي ----------
 def get_current_user():
     uid = get_jwt_identity()
     if not uid:
@@ -28,82 +33,96 @@ def get_current_user():
     return User.query.get(uid)
 
 
-# ---------- عرض قروبات المستخدم ----------
+def get_membership(user_id: int, group_id: int):
+    """يرجع سجل العضوية GroupMember لو المستخدم عضو في القروب"""
+    return GroupMember.query.filter_by(user_id=user_id, group_id=group_id).first()
+
+
+# ---------- Groups list & create ----------
+
 @groups_bp.route("", methods=["GET"])
-@groups_bp.route("/", methods=["GET"])
 @jwt_required()
-def list_my_groups():
-    """ترجع كل القروبات اللي المستخدم عضو فيها"""
+def list_groups():
+    """يعرض كل القروبات اللي المستخدم عضو فيها"""
     user = get_current_user()
     if not user:
         return jsonify({"msg": "User not found"}), 404
 
-    memberships = GroupMember.query.filter_by(user_id=user.id).all()
+    memberships = (
+        GroupMember.query.filter_by(user_id=user.id)
+        .join(Group, GroupMember.group_id == Group.id)
+        .all()
+    )
 
-    groups_data = []
+    results = []
     for m in memberships:
-        g = m.group
-        groups_data.append(
+        g = m.group  # يفترض وجود relationship في الموديل
+        results.append(
             {
                 "id": g.id,
                 "name": g.name,
                 "invite_code": g.invite_code,
-                "role": m.role,
-                "is_owner": m.role == "admin" or g.owner_id == user.id,
+                "role": m.role or "member",
+                "is_owner": bool(
+                    m.role == "admin" or getattr(g, "owner_id", None) == user.id
+                ),
             }
         )
 
-    return jsonify(groups_data), 200
+    return jsonify(results), 200
 
 
-# ---------- إنشاء قروب جديد ----------
 @groups_bp.route("", methods=["POST"])
-@groups_bp.route("/", methods=["POST"])
 @jwt_required()
 def create_group():
-    data = request.get_json() or {}
-    name = (data.get("name") or "").strip()
-
-    if not name:
-        return jsonify({"msg": "Group name is required"}), 400
-
+    """إنشاء قروب جديد للمستخدم الحالي"""
     user = get_current_user()
     if not user:
         return jsonify({"msg": "User not found"}), 404
 
-    # توليد كود دعوة فريد
+    data = request.get_json() or {}
+    name = (data.get("name") or "").strip()
+    if not name:
+        return jsonify({"msg": "Group name is required"}), 400
+
     invite_code = generate_invite_code()
 
     group = Group(
         name=name,
-        owner_id=user.id,
         invite_code=invite_code,
+        owner_id=user.id,
     )
     db.session.add(group)
-    db.session.flush()  # عشان نضمن أن group.id جاهز
+    db.session.flush()  # عشان group.id
 
-    # إضافة المالك كـ admin داخل GroupMember
-    membership = GroupMember(
+    gm = GroupMember(
         group_id=group.id,
         user_id=user.id,
         role="admin",
     )
-    db.session.add(membership)
+    db.session.add(gm)
     db.session.commit()
 
-    return jsonify(
-        {
-            "id": group.id,
-            "name": group.name,
-            "role": "admin",
-        }
-    ), 201
+    return (
+        jsonify(
+            {
+                "id": group.id,
+                "name": group.name,
+                "invite_code": group.invite_code,
+                "role": gm.role,
+                "is_owner": True,
+            }
+        ),
+        201,
+    )
 
 
-# ---------- تفاصيل قروب معيّن ----------
+# ---------- Group details ----------
+
 @groups_bp.route("/<int:group_id>", methods=["GET"])
 @jwt_required()
 def get_group(group_id):
+    """تفاصيل قروب واحد"""
     user = get_current_user()
     if not user:
         return jsonify({"msg": "User not found"}), 404
@@ -112,29 +131,79 @@ def get_group(group_id):
     if not group:
         return jsonify({"msg": "Group not found"}), 404
 
-    membership = GroupMember.query.filter_by(
-        group_id=group.id, user_id=user.id
-    ).first()
+    membership = get_membership(user.id, group.id)
     if not membership:
         return jsonify({"msg": "You are not a member of this group"}), 403
 
     members_count = GroupMember.query.filter_by(group_id=group.id).count()
 
-    return jsonify(
-        {
-            "id": group.id,
-            "name": group.name,
-            "invite_code": group.invite_code,
-            "members_count": members_count,
-            "is_owner": membership.role == "admin" or group.owner_id == user.id,
-        }
-    ), 200
+    return (
+        jsonify(
+            {
+                "id": group.id,
+                "name": group.name,
+                "invite_code": group.invite_code,
+                "members_count": members_count,
+                "is_owner": bool(
+                    membership.role == "admin"
+                    or getattr(group, "owner_id", None) == user.id
+                ),
+            }
+        ),
+        200,
+    )
 
 
-# ---------- عرض أعضاء القروب ----------
+# ---------- Join by invite code ----------
+
+@groups_bp.route("/join", methods=["POST"])
+@jwt_required()
+def join_group():
+    """الانضمام إلى قروب عن طريق كود الدعوة"""
+    user = get_current_user()
+    if not user:
+        return jsonify({"msg": "User not found"}), 404
+
+    data = request.get_json() or {}
+    code = (data.get("code") or "").strip().upper()
+    if not code:
+        return jsonify({"msg": "Invite code is required"}), 400
+
+    group = Group.query.filter_by(invite_code=code).first()
+    if not group:
+        return jsonify({"msg": "Group not found"}), 404
+
+    existing = get_membership(user.id, group.id)
+    if existing:
+        return jsonify({"msg": "You are already a member of this group"}), 400
+
+    gm = GroupMember(group_id=group.id, user_id=user.id, role="member")
+    db.session.add(gm)
+    db.session.commit()
+
+    members_count = GroupMember.query.filter_by(group_id=group.id).count()
+
+    return (
+        jsonify(
+            {
+                "id": group.id,
+                "name": group.name,
+                "invite_code": group.invite_code,
+                "members_count": members_count,
+                "role": gm.role,
+                "is_owner": False,
+            }
+        ),
+        201,
+    )
+
+
+# ---------- Members ----------
+
 @groups_bp.route("/<int:group_id>/members", methods=["GET"])
 @jwt_required()
 def list_members(group_id):
+    """عرض أعضاء القروب"""
     user = get_current_user()
     if not user:
         return jsonify({"msg": "User not found"}), 404
@@ -143,82 +212,117 @@ def list_members(group_id):
     if not group:
         return jsonify({"msg": "Group not found"}), 404
 
-    memberships = GroupMember.query.filter_by(group_id=group.id).all()
-    data = []
-    for m in memberships:
-        data.append(
+    membership = get_membership(user.id, group.id)
+    if not membership:
+        return jsonify({"msg": "You are not a member of this group"}), 403
+
+    members = GroupMember.query.filter_by(group_id=group.id).all()
+
+    results = []
+    for m in members:
+        u = m.user  # يفترض وجود relationship في الموديل
+        results.append(
             {
-                "id": m.user.id,
-                "name": m.user.name,
-                "email": m.user.email,
-                "role": m.role,
+                "id": m.id,  # ID حق العضوية (الفرونت يستعمله للحذف)
+                "name": u.name,
+                "email": u.email,
+                "role": m.role or "member",
             }
         )
 
-    return jsonify(data), 200
+    return jsonify(results), 200
 
 
-# ---------- إضافة عضو (Admin فقط) ----------
 @groups_bp.route("/<int:group_id>/members", methods=["POST"])
 @jwt_required()
 def add_member(group_id):
-    user = get_current_user()
-    if not user:
+    """إضافة عضو جديد للقروب مع إنشاء User بباسوورد عشوائي مشفّر لو احتجنا"""
+    current_user = get_current_user()
+    if not current_user:
         return jsonify({"msg": "User not found"}), 404
 
     group = Group.query.get(group_id)
     if not group:
         return jsonify({"msg": "Group not found"}), 404
 
-    admin_membership = GroupMember.query.filter_by(
-        group_id=group.id, user_id=user.id, role="admin"
-    ).first()
-    if not admin_membership:
-        return jsonify({"msg": "Only admins can add members"}), 403
+    current_membership = get_membership(current_user.id, group.id)
+    if not current_membership:
+        return jsonify({"msg": "You are not a member of this group"}), 403
 
     data = request.get_json() or {}
     name = (data.get("name") or "").strip()
-    email = (data.get("email") or "").strip()
+    email = (data.get("email") or "").strip().lower()
 
     if not name:
         return jsonify({"msg": "Name is required"}), 400
 
-    # إنشاء مستخدم بسيط لو الإيميل مو موجود (لأغراض الديمو)
-    member_user = User.query.filter_by(email=email).first()
-    if not member_user:
-        member_user = User(name=name, email=email or f"{name}@example.com")
-        db.session.add(member_user)
-        db.session.flush()
+    # نحاول نلقى مستخدم بنفس الإيميل لو موجود
+    user = None
+    if email:
+        user = User.query.filter_by(email=email).first()
 
-    # التحقق من عدم تكرار العضو في نفس القروب
-    existing = GroupMember.query.filter_by(
-        group_id=group.id, user_id=member_user.id
-    ).first()
-    if existing:
-        return jsonify({"msg": "User is already a member of this group"}), 400
+    # لو ما فيه مستخدم → ننشئه بباسوورد عشوائي (مشفر)
+    if not user:
+        random_password = secrets.token_hex(8)
+        pw_hash = generate_password_hash(random_password)
+        user = User(name=name, email=email or None, password_hash=pw_hash)
+        db.session.add(user)
+        db.session.flush()  # للحصول على user.id
 
-    membership = GroupMember(
-        group_id=group.id,
-        user_id=member_user.id,
-        role="member",
-    )
-    db.session.add(membership)
+    # نتأكد أنه مو مضاف من قبل
+    already = GroupMember.query.filter_by(group_id=group.id, user_id=user.id).first()
+    if already:
+        return jsonify({"msg": "Member already in this group"}), 400
+
+    gm = GroupMember(group_id=group.id, user_id=user.id, role="member")
+    db.session.add(gm)
     db.session.commit()
 
-    return jsonify(
-        {
-            "id": member_user.id,
-            "name": member_user.name,
-            "email": member_user.email,
-            "role": "member",
-        }
-    ), 201
+    return (
+        jsonify(
+            {
+                "id": gm.id,
+                "name": user.name,
+                "email": user.email,
+                "role": gm.role or "member",
+            }
+        ),
+        201,
+    )
 
 
-# ---------- حذف عضو (Admin فقط) ----------
-@groups_bp.route("/<int:group_id>/members/<int:user_id>", methods=["DELETE"])
+@groups_bp.route("/<int:group_id>/members/<int:member_id>", methods=["DELETE"])
 @jwt_required()
-def remove_member(group_id, user_id):
+def remove_member(group_id, member_id):
+    """حذف عضوية من القروب"""
+    current_user = get_current_user()
+    if not current_user:
+        return jsonify({"msg": "User not found"}), 404
+
+    group = Group.query.get(group_id)
+    if not group:
+        return jsonify({"msg": "Group not found"}), 404
+
+    current_membership = get_membership(current_user.id, group.id)
+    if not current_membership:
+        return jsonify({"msg": "You are not a member of this group"}), 403
+
+    member = GroupMember.query.filter_by(id=member_id, group_id=group.id).first()
+    if not member:
+        return jsonify({"msg": "Member not found"}), 404
+
+    db.session.delete(member)
+    db.session.commit()
+
+    return jsonify({"msg": "Member removed"}), 200
+
+
+# ---------- Files (قراءة فقط حالياً) ----------
+
+@groups_bp.route("/<int:group_id>/files", methods=["GET"])
+@jwt_required()
+def list_files(group_id):
+    """جلب ملفات القروب (لو ما فيه ملفات يرجّع قائمة فاضية)"""
     user = get_current_user()
     if not user:
         return jsonify({"msg": "User not found"}), 404
@@ -227,47 +331,21 @@ def remove_member(group_id, user_id):
     if not group:
         return jsonify({"msg": "Group not found"}), 404
 
-    admin_membership = GroupMember.query.filter_by(
-        group_id=group.id, user_id=user.id, role="admin"
-    ).first()
-    if not admin_membership:
-        return jsonify({"msg": "Only admins can remove members"}), 403
-
-    membership = GroupMember.query.filter_by(
-        group_id=group_id, user_id=user_id
-    ).first()
+    membership = get_membership(user.id, group.id)
     if not membership:
-        return jsonify({"msg": "Member not found in this group"}), 404
-
-    db.session.delete(membership)
-    db.session.commit()
-
-    return jsonify({"msg": "Member removed"}), 200
-
-# ---------- جلب ملفات القروب (مؤقتاً قائمة فاضية عشان الواجهة ما تضرب) ----------
-@groups_bp.route("/<int:group_id>/files", methods=["GET"])
-@jwt_required()
-def group_files(group_id):
-    # نتأكد من المستخدم الحالي
-    uid = get_jwt_identity()
-    if not uid:
-        return jsonify({"msg": "User not found"}), 404
-
-    user = User.query.get(uid)
-    if not user:
-        return jsonify({"msg": "User not found"}), 404
-
-    group = Group.query.get(group_id)
-    if not group:
-        return jsonify({"msg": "Group not found"}), 404
-
-    # التحقق إن المستخدم عضو في القروب
-    member = GroupMember.query.filter_by(
-        user_id=user.id, group_id=group.id
-    ).first()
-    if not member:
         return jsonify({"msg": "You are not a member of this group"}), 403
 
-    # حالياً نرجّع قائمة فاضية
-    # لاحقاً ممكن نربطها مع جدول GroupFile
-    return jsonify([]), 200
+    files = GroupFile.query.filter_by(group_id=group.id).all()
+
+    results = []
+    for f in files:
+        results.append(
+            {
+                "id": f.id,
+                "group_id": f.group_id,
+                "name": getattr(f, "original_name", None) or getattr(f, "filename", None),
+                "filename": getattr(f, "filename", None),
+            }
+        )
+
+    return jsonify(results), 200
