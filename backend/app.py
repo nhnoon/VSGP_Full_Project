@@ -2,7 +2,7 @@ import os
 from dotenv import load_dotenv
 from flask import Flask
 from flask_cors import CORS
-from sqlalchemy import text 
+from sqlalchemy import text
 
 from extensions import db, jwt
 
@@ -49,30 +49,20 @@ def create_app():
     from models.task import Task  # noqa: F401
     from models.file import GroupFile  # noqa: F401
 
-    # ---------- استيراد البلوبرنتس الأساسية ----------
+    # ---------- استيراد البلوبرنتس ----------
     from routes.auth import auth_bp
     from routes.groups import groups_bp
     from routes.messages import messages_bp
-    from routes.tasks import tasks_bp 
-    from routes.files import files_bp 
+    from routes.tasks import tasks_bp
 
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(groups_bp, url_prefix="/groups")
     app.register_blueprint(messages_bp, url_prefix="/groups")
     app.register_blueprint(tasks_bp, url_prefix="/groups")
-    app.register_blueprint(files_bp, url_prefix="/groups") 
-    # محاولة ربط بلوبرنت الملفات لو موجود (ما يطيّح السيرفر لو ناقص)
-    try:
-        from routes.files import files_bp
-    except ImportError:
-        files_bp = None
-
-    if files_bp is not None:
-        app.register_blueprint(files_bp, url_prefix="/groups")
 
     # ---------- تهيئة قاعدة البيانات ----------
     with app.app_context():
-        # إنشاء الجداول لو مش موجودة
+        # إنشاء الجداول
         db.create_all()
 
         # جدول الرسائل البسيط (للدردشة)
@@ -89,7 +79,7 @@ def create_app():
             )
         )
 
-        # إنشاء مستخدم افتراضي مرة وحدة لو مو موجود
+        # إنشاء مستخدم افتراضي مرة واحدة لو غير موجود
         from werkzeug.security import generate_password_hash
 
         default_email = os.getenv("DEFAULT_ADMIN_EMAIL", "noon@test.com")

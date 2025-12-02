@@ -6,7 +6,6 @@ from extensions import db
 from models.user import User
 from models.group import Group
 from models.group_member import GroupMember
-
 import string
 import secrets
 
@@ -244,3 +243,31 @@ def remove_member(group_id, user_id):
     db.session.commit()
 
     return jsonify({"msg": "Member removed"}), 200
+
+# ---------- جلب ملفات القروب (مؤقتاً قائمة فاضية عشان الواجهة ما تضرب) ----------
+@groups_bp.route("/<int:group_id>/files", methods=["GET"])
+@jwt_required()
+def group_files(group_id):
+    # نتأكد من المستخدم الحالي
+    uid = get_jwt_identity()
+    if not uid:
+        return jsonify({"msg": "User not found"}), 404
+
+    user = User.query.get(uid)
+    if not user:
+        return jsonify({"msg": "User not found"}), 404
+
+    group = Group.query.get(group_id)
+    if not group:
+        return jsonify({"msg": "Group not found"}), 404
+
+    # التحقق إن المستخدم عضو في القروب
+    member = GroupMember.query.filter_by(
+        user_id=user.id, group_id=group.id
+    ).first()
+    if not member:
+        return jsonify({"msg": "You are not a member of this group"}), 403
+
+    # حالياً نرجّع قائمة فاضية
+    # لاحقاً ممكن نربطها مع جدول GroupFile
+    return jsonify([]), 200
