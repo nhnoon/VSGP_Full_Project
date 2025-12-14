@@ -1,0 +1,197 @@
+.gd-page{
+  display:flex;
+  min-height:100vh;
+  background:#f6f8fc;
+  font-family: "Segoe UI", system-ui, -apple-system, Arial;
+}
+
+/* sidebar */
+.gd-sidebar{
+  width:260px;
+  background:#fff;
+  border-right:1px solid #e5e7eb;
+  padding:18px;
+}
+.gd-back-link{
+  display:inline-block;
+  color:#2563eb;
+  text-decoration:none;
+  font-weight:600;
+  margin-bottom:14px;
+}
+.gd-side-card{
+  background:#f1f5ff;
+  border:1px solid #dbe6ff;
+  padding:12px;
+  border-radius:12px;
+  margin-bottom:14px;
+}
+.gd-side-label{font-size:12px;color:#6b7280;}
+.gd-side-title{font-size:16px;font-weight:700;color:#111827;margin-top:4px;}
+
+.gd-tabs{display:flex;flex-direction:column;gap:8px;}
+.gd-tab{
+  text-align:left;
+  border:none;
+  background:#f3f4f6;
+  color:#111827;
+  padding:10px 12px;
+  border-radius:10px;
+  cursor:pointer;
+  font-weight:600;
+}
+.gd-tab:hover{background:#e9eefc;}
+.gd-tab.active{
+  background:#2563eb;
+  color:#fff;
+}
+
+/* main */
+.gd-main{flex:1;padding:22px;}
+.gd-error{
+  background:#fee2e2;
+  color:#991b1b;
+  padding:10px 12px;
+  border-radius:10px;
+  margin-bottom:12px;
+}
+
+/* overview */
+.gd-header{
+  display:flex;
+  justify-content:space-between;
+  align-items:flex-start;
+  gap:16px;
+  background:#fff;
+  border:1px solid #e5e7eb;
+  border-radius:14px;
+  padding:16px;
+}
+.gd-title{font-size:22px;margin:0;color:#111827;}
+.gd-subtitle{margin:4px 0 0;color:#6b7280;font-size:13px;}
+.gd-header-actions{display:flex;gap:12px;align-items:stretch;}
+.gd-invite{
+  background:#f9fafb;
+  border:1px solid #e5e7eb;
+  border-radius:12px;
+  padding:10px 12px;
+  min-width:180px;
+}
+.gd-invite-label{font-size:12px;color:#6b7280;}
+.gd-invite-code{font-size:18px;font-weight:800;margin:6px 0;color:#111827;}
+.gd-pill{
+  border:none;
+  background:#2563eb;
+  color:#fff;
+  padding:8px 10px;
+  border-radius:10px;
+  cursor:pointer;
+  font-weight:700;
+  width:100%;
+}
+.gd-pill:hover{background:#1d4ed8;}
+.gd-danger{
+  border:none;
+  background:#ef4444;
+  color:#fff;
+  padding:10px 12px;
+  border-radius:12px;
+  cursor:pointer;
+  font-weight:800;
+  height:fit-content;
+}
+.gd-danger:hover{background:#dc2626;}
+
+/* stat cards */
+.gd-stats{
+  display:grid;
+  grid-template-columns:repeat(4, minmax(0,1fr));
+  gap:12px;
+  margin-top:14px;
+}
+.gd-stat{
+  background:#fff;
+  border:1px solid #e5e7eb;
+  border-radius:14px;
+  padding:14px;
+}
+.gd-stat-label{font-size:12px;color:#6b7280;}
+.gd-stat-value{font-size:22px;font-weight:900;color:#111827;margin-top:6px;}
+
+/* progress */
+.gd-progress{
+  background:#fff;
+  border:1px solid #e5e7eb;
+  border-radius:14px;
+  padding:14px;
+  margin-top:12px;
+}
+.gd-progress-top{font-size:14px;color:#111827;margin-bottom:10px;}
+.gd-progress-bar{
+  height:10px;
+  background:#e5e7eb;
+  border-radius:999px;
+  overflow:hidden;
+}
+.gd-progress-fill{
+  height:100%;
+  background:linear-gradient(90deg,#2563eb,#60a5fa);
+}
+
+/* grid panels (like Teams dashboard widgets) */
+.gd-grid{
+  display:grid;
+  grid-template-columns:repeat(2, minmax(0,1fr));
+  gap:12px;
+  margin-top:12px;
+}
+.gd-panel{
+  background:#fff;
+  border:1px solid #e5e7eb;
+  border-radius:14px;
+  padding:14px;
+  min-height:160px;
+}
+.gd-panel-title{
+  font-weight:900;
+  color:#111827;
+  margin-bottom:10px;
+}
+.gd-row{
+  display:flex;
+  gap:10px;
+  align-items:flex-start;
+  padding:6px 0;
+}
+.gd-dot{
+  width:10px;height:10px;border-radius:50%;
+  background:#d1d5db;margin-top:6px;flex:0 0 auto;
+}
+.gd-dot.ok{background:#22c55e;}
+.gd-chip{
+  background:#f3f4f6;
+  border-radius:10px;
+  padding:3px 7px;
+  font-size:12px;
+  flex:0 0 auto;
+}
+.gd-small{font-size:12px;color:#6b7280;margin-top:2px;}
+.gd-muted{color:#6b7280;font-size:13px;}
+.gd-done{text-decoration:line-through;color:#9ca3af;}
+
+.gd-link-btn{
+  margin-top:10px;
+  border:none;
+  background:transparent;
+  color:#2563eb;
+  cursor:pointer;
+  font-weight:800;
+}
+.gd-link-btn:hover{text-decoration:underline;}
+
+/* responsive */
+@media (max-width: 980px){
+  .gd-stats{grid-template-columns:repeat(2, minmax(0,1fr));}
+  .gd-grid{grid-template-columns:1fr;}
+  .gd-sidebar{width:220px;}
+}

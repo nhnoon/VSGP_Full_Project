@@ -1,0 +1,75 @@
+/* src/index.css */
+@import "./styles.css";
+* { box-sizing: border-box; }
+body {
+  margin: 0;
+  font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial;
+  color: #111827;
+  background: #f6f7fb;
+}
+
+/* ===== Time Spent Chart (force visible) ===== */
+.time-card {
+  background: #ffffff;
+  border-radius: 16px;
+  padding: 20px;
+  width: 100%;
+  max-width: 420px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.05);
+  overflow: hidden;
+}
+
+.time-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.time-header h3 {
+  font-size: 16px;
+  font-weight: 600;
+  margin: 0;
+}
+
+.time-value {
+  font-size: 14px;
+  color: #2563eb;
+  font-weight: 600;
+}
+
+.bars {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 14px;
+  height: 140px !important;   /* ✅ أهم شي */
+  padding-top: 8px;
+}
+
+.bar-wrapper {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.bar {
+  display: block;
+  width: 14px;
+  min-height: 6px;            /* ✅ حتى لو الوقت قليل يبان */
+  background: #dbeafe;
+  border-radius: 10px;
+}
+
+.bar.active {
+  background: linear-gradient(180deg, #3b82f6, #2563eb);
+}
+
+.bar-wrapper span {
+  font-size: 12px;
+  color: #6b7280;
+}
+

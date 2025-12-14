@@ -1,0 +1,60 @@
+/* src/components/sidebar.css */
+.side{
+  width:260px;
+  background:#fff;
+  border-right:1px solid #eef0f6;
+  padding:18px;
+  display:flex;
+  flex-direction:column;
+  position:sticky;
+  top:0;
+  height:100vh;
+}
+
+.brand{
+  display:flex;
+  gap:12px;
+  align-items:center;
+}
+
+.brandDot{
+  width:42px;height:42px;
+  border-radius:14px;
+  background:linear-gradient(135deg,#4f46e5,#2563eb);
+  color:#fff;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-weight:800;
+}
+
+.brandName{ font-weight:800; color:#111827; }
+.brandSub{ font-size:12px; color:#6b7280; margin-top:2px; }
+
+.nav{ margin-top:18px; display:flex; flex-direction:column; gap:8px; }
+
+.navItem{
+  padding:10px 12px;
+  border-radius:12px;
+  color:#374151;
+  text-decoration:none;
+  font-weight:600;
+}
+
+.navItem:hover{ background:#f3f4ff; }
+.navItem.active{
+  background:#eef2ff;
+  color:#1e3a8a;
+  border:1px solid #e0e7ff;
+}
+
+.sideBottom{ margin-top:auto; padding-top:14px; }
+.btnGhost{
+  width:100%;
+  padding:10px 12px;
+  border-radius:12px;
+  border:1px solid #eef0f6;
+  background:#fff;
+  font-weight:700;
+  cursor:pointer;
+}

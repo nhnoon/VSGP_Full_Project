@@ -1,0 +1,102 @@
+/* src/layout/appLayout.css */
+.appShell {
+  display: flex;
+  min-height: 100vh;
+  background: #f6f7fb;
+}
+
+.appMain {
+  flex: 1;
+  padding: 24px;
+}
+
+.appContainer {
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+/* Sidebar */
+.sidebar {
+  width: 260px;
+  background: #ffffff;
+  border-right: 1px solid #e9eaf2;
+  padding: 18px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 10px;
+}
+
+.brand .logoDot {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px;
+  background: #6d28d9; /* بنفس روح syno */
+  display: grid;
+  place-items: center;
+  color: white;
+  font-weight: 800;
+}
+
+.brand .brandText {
+  line-height: 1.1;
+}
+.brand .brandText .title {
+  font-weight: 800;
+  font-size: 16px;
+}
+.brand .brandText .sub {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.nav {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.nav a {
+  text-decoration: none;
+  padding: 10px 12px;
+  border-radius: 12px;
+  color: #111827;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-weight: 600;
+}
+
+.nav a:hover {
+  background: #f3f4ff;
+}
+
+.nav a.active {
+  background: #ede9fe;
+  color: #5b21b6;
+}
+
+.sidebarFooter {
+  margin-top: auto;
+  padding: 10px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.logoutBtn {
+  border: none;
+  padding: 10px 12px;
+  border-radius: 12px;
+  cursor: pointer;
+  background: #ef4444;
+  color: #fff;
+  font-weight: 700;
+}
