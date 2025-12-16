@@ -1,32 +1,16 @@
-// frontend/src/utils/api.js
+export const API_BASE =
+  import.meta.env.VITE_API_BASE || "http://localhost:5000";
 
-// رابط الباك إند في Render
-export const API_BASE = "https://vsgp-full-project-2.onrender.com";
-
-// دالة مشابهة لـ fetch لكنها تضيف التوكن في الـ headers
 export async function authFetch(path, options = {}) {
- const token = localStorage.getItem("vsgp_token");
+  const token = localStorage.getItem("vsgp_token");
 
-  // ندمج الهيدرز اللي تجي من الاستدعاء مع حقنا
-  const headers = {
-    "Content-Type": "application/json",
-    ...(options.headers || {}),
-  };
+  const headers = { ...(options.headers || {}) };
 
-  if (token) {
-    headers["Authorization"] = `Bearer ${token}`;
+  if (!(options.body instanceof FormData)) {
+    headers["Content-Type"] = "application/json";
   }
 
-  // نرجّع Response زي fetch تماماً
-  const res = await fetch(`${API_BASE}${path}`, {
-    ...options,
-    headers,
-  });
+  if (token) headers["Authorization"] = `Bearer ${token}`;
 
- return res;
+  return fetch(`${API_BASE}${path}`, { ...options, headers });
 }
-
-// لو في أماكن تستخدمه كـ default import
-//export default authFetch;
-// frontend/src/utils/api.js
-

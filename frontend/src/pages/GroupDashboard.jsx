@@ -1,9 +1,9 @@
 // src/pages/GroupDashboard.jsx
+// src/pages/GroupDashboard.jsx
 import "./GroupDashboard.css";
 import React, { useEffect, useState } from "react";
 import { useParams, Link, useLocation, useNavigate } from "react-router-dom";
 import { authFetch } from "../utils/api";
-import "./GroupDashboard.css";
 
 const TABS = ["overview", "members", "files", "chat", "tasks", "sessions"];
 
@@ -62,6 +62,55 @@ export default function GroupDashboard() {
       false
   );
 
+  // ================== HELPERS (Sessions Refresh) ==================
+  const fetchSessions = async () => {
+    try {
+      const res = await authFetch(`/groups/${groupId}/sessions`, {
+        method: "GET",
+      });
+      const data = await res.json().catch(() => []);
+      if (Array.isArray(data)) setSessions(data);
+    } catch (e) {
+      console.error("Error refreshing sessions", e);
+    }
+  };
+
+  // Start / End session (will reflect for all via polling)
+  const startSession = async (id) => {
+    try {
+      const res = await authFetch(`/groups/${groupId}/sessions/${id}/start`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.msg || "Error starting session");
+        return;
+      }
+      fetchSessions();
+    } catch (e) {
+      console.error(e);
+      alert("Error starting session");
+    }
+  };
+
+  const endSession = async (id) => {
+    try {
+      const res = await authFetch(`/groups/${groupId}/sessions/${id}/end`, {
+        method: "POST",
+      });
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.msg || "Error ending session");
+        return;
+      }
+      fetchSessions();
+    } catch (e) {
+      console.error(e);
+      alert("Error ending session");
+    }
+  };
+
+  // ----------------- حذف القروب -----------------
   const handleDeleteGroup = async () => {
     if (!window.confirm("Are you sure you want to delete this group?")) return;
 
@@ -92,6 +141,16 @@ export default function GroupDashboard() {
 
     return () => clearInterval(id);
   }, []);
+
+  // ✅ تحديث السيشنز تلقائيًا لكل القروب (عشان Start/End يبان عند الكل)
+  useEffect(() => {
+    const id = setInterval(() => {
+      fetchSessions();
+    }, 5000); // كل 5 ثواني
+
+    return () => clearInterval(id);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [groupId]);
 
   // ----------------- تحميل البيانات من الباك إند -----------------
   useEffect(() => {
@@ -140,15 +199,7 @@ export default function GroupDashboard() {
         if (Array.isArray(messagesData)) setMessages(messagesData);
 
         // السيشنز
-        try {
-          const sessionsRes = await authFetch(`/groups/${groupId}/sessions`, {
-            method: "GET",
-          });
-          const sessionsData = await sessionsRes.json().catch(() => []);
-          if (Array.isArray(sessionsData)) setSessions(sessionsData);
-        } catch (e) {
-          console.error("Error loading sessions", e);
-        }
+        await fetchSessions();
       } catch (err) {
         console.error(err);
         setError(err.message || "Error loading group data.");
@@ -158,6 +209,7 @@ export default function GroupDashboard() {
     };
 
     loadData();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupId]);
 
   // ----------------- رابط الدعوة -----------------
@@ -171,7 +223,6 @@ export default function GroupDashboard() {
   };
 
   // ================= TASKS =================
-
   const handleAddTask = async (e) => {
     e.preventDefault();
     if (!newTask.title.trim()) return;
@@ -227,7 +278,6 @@ export default function GroupDashboard() {
   };
 
   // ================= MEMBERS =================
-
   const handleAddMember = async (e) => {
     e.preventDefault();
     if (!newMember.name.trim()) return;
@@ -262,7 +312,6 @@ export default function GroupDashboard() {
   };
 
   // ================= FILES =================
-
   const handleFileUpload = async (e) => {
     e.preventDefault();
     if (!selectedFile) return;
@@ -278,8 +327,8 @@ export default function GroupDashboard() {
       });
 
       const data = await res.json().catch(() => ({}));
-
       setFiles((prev) => [...prev, data]);
+
       setSelectedFile(null);
       e.target.reset();
     } catch (err) {
@@ -291,7 +340,6 @@ export default function GroupDashboard() {
   };
 
   // ================= CHAT =================
-
   const handleSendMessage = async (e) => {
     e.preventDefault();
     const content = newMessage.trim();
@@ -316,7 +364,6 @@ export default function GroupDashboard() {
   };
 
   // ================= HELPERS & STATS =================
-
   const completedCount = tasks.filter((t) => t.completed).length;
   const totalTasks = tasks.length;
   const progressPercent =
@@ -371,7 +418,6 @@ export default function GroupDashboard() {
   const recentTasks = tasks.slice(-4).reverse();
 
   // ================= SESSIONS =================
-
   const handleAddSession = async (e) => {
     e.preventDefault();
 
@@ -402,9 +448,12 @@ export default function GroupDashboard() {
         body: JSON.stringify(payload),
       });
 
-      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.msg || "Error creating session");
+        return;
+      }
 
-      setSessions((prev) => [...prev, data]);
       setNewSession({
         title: "",
         description: "",
@@ -412,19 +461,29 @@ export default function GroupDashboard() {
         time: "",
         duration_minutes: 60,
       });
+
+      await fetchSessions();
     } catch (err) {
       console.error(err);
       alert(err.message || "Error creating session");
     }
   };
 
-  const deleteSession = async (sessionId) => {
+  const deleteSessionHandler = async (sessionId) => {
     if (!window.confirm("Delete this session?")) return;
+
     try {
-      await authFetch(`/groups/${groupId}/sessions/${sessionId}`, {
+      const res = await authFetch(`/groups/${groupId}/sessions/${sessionId}`, {
         method: "DELETE",
       });
-      setSessions((prev) => prev.filter((s) => s.id !== sessionId));
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        alert(data.msg || "Error deleting session");
+        return;
+      }
+
+      await fetchSessions();
     } catch (err) {
       console.error(err);
       alert("Error deleting session.");
@@ -432,7 +491,6 @@ export default function GroupDashboard() {
   };
 
   // ================= UI =================
-
   return (
     <div className="gd-page">
       <aside className="gd-sidebar">
@@ -453,6 +511,7 @@ export default function GroupDashboard() {
               key={tab}
               className={"gd-tab" + (activeTab === tab ? " active" : "")}
               onClick={() => setActiveTab(tab)}
+              type="button"
             >
               {tab[0].toUpperCase() + tab.slice(1)}
             </button>
@@ -466,7 +525,7 @@ export default function GroupDashboard() {
 
         {!loading && !error && group && (
           <>
-            {/* ================= OVERVIEW (NEW UI) ================= */}
+            {/* ================= OVERVIEW ================= */}
             {activeTab === "overview" && (
               <div className="gd-overview">
                 <div className="gd-header">
@@ -481,13 +540,13 @@ export default function GroupDashboard() {
                       <div className="gd-invite-code">
                         {group.invite_code || "———"}
                       </div>
-                      <button className="gd-pill" onClick={handleCopyInvite}>
+                      <button className="gd-pill" onClick={handleCopyInvite} type="button">
                         Copy invite link
                       </button>
                     </div>
 
                     {isOwner && (
-                      <button className="gd-danger" onClick={handleDeleteGroup}>
+                      <button className="gd-danger" onClick={handleDeleteGroup} type="button">
                         Delete group
                       </button>
                     )}
@@ -533,7 +592,7 @@ export default function GroupDashboard() {
                   </div>
                 </div>
 
-                {/* GRID PANELS (like your screenshot) */}
+                {/* GRID PANELS */}
                 <div className="gd-grid">
                   <div className="gd-panel">
                     <div className="gd-panel-title">Recent Tasks</div>
@@ -543,16 +602,11 @@ export default function GroupDashboard() {
                       recentTasks.map((t) => (
                         <div key={t.id} className="gd-row">
                           <span className={"gd-dot " + (t.completed ? "ok" : "")} />
-                          <span className={t.completed ? "gd-done" : ""}>
-                            {t.title}
-                          </span>
+                          <span className={t.completed ? "gd-done" : ""}>{t.title}</span>
                         </div>
                       ))
                     )}
-                    <button
-                      className="gd-link-btn"
-                      onClick={() => setActiveTab("tasks")}
-                    >
+                    <button className="gd-link-btn" onClick={() => setActiveTab("tasks")} type="button">
                       View all tasks →
                     </button>
                   </div>
@@ -568,17 +622,13 @@ export default function GroupDashboard() {
                           <span>
                             <strong>{s.title || "Session"}</strong>
                             <div className="gd-small">
-                              {formatDateTime(s.start_time)} •{" "}
-                              {getDurationMinutes(s)} min
+                              {formatDateTime(s.start_time)} • {getDurationMinutes(s)} min
                             </div>
                           </span>
                         </div>
                       ))
                     )}
-                    <button
-                      className="gd-link-btn"
-                      onClick={() => setActiveTab("sessions")}
-                    >
+                    <button className="gd-link-btn" onClick={() => setActiveTab("sessions")} type="button">
                       Manage sessions →
                     </button>
                   </div>
@@ -595,10 +645,7 @@ export default function GroupDashboard() {
                         </div>
                       ))
                     )}
-                    <button
-                      className="gd-link-btn"
-                      onClick={() => setActiveTab("files")}
-                    >
+                    <button className="gd-link-btn" onClick={() => setActiveTab("files")} type="button">
                       View files →
                     </button>
                   </div>
@@ -614,16 +661,11 @@ export default function GroupDashboard() {
                         .map((msg) => (
                           <div key={msg.id} className="gd-row">
                             <span className="gd-chip">💬</span>
-                            <span className="gd-small">
-                              {msg.content}
-                            </span>
+                            <span className="gd-small">{msg.content}</span>
                           </div>
                         ))
                     )}
-                    <button
-                      className="gd-link-btn"
-                      onClick={() => setActiveTab("chat")}
-                    >
+                    <button className="gd-link-btn" onClick={() => setActiveTab("chat")} type="button">
                       Open chat →
                     </button>
                   </div>
@@ -636,11 +678,9 @@ export default function GroupDashboard() {
               </div>
             )}
 
-            {/* ================= باقي التابات مثل ملفك (بدون حذف) ================= */}
-
+            {/* ================= MEMBERS ================= */}
             {activeTab === "members" && (
               <div className="card">
-                {/* (نفس كود members عندك بدون تعديل) */}
                 <div className="card-header-row">
                   <h2 className="card-title">Members</h2>
                   <span className="badge">
@@ -689,6 +729,7 @@ export default function GroupDashboard() {
                         <button
                           className="btn-danger-small"
                           onClick={() => removeMember(m.id)}
+                          type="button"
                         >
                           Remove
                         </button>
@@ -705,9 +746,9 @@ export default function GroupDashboard() {
               </div>
             )}
 
+            {/* ================= FILES ================= */}
             {activeTab === "files" && (
               <div className="card">
-                {/* (نفس كود files عندك بدون حذف) */}
                 <h2 className="card-title">Files</h2>
                 <p className="muted-text">
                   Upload lecture notes, screenshots, or any study resources for this group.
@@ -747,9 +788,9 @@ export default function GroupDashboard() {
               </div>
             )}
 
+            {/* ================= CHAT ================= */}
             {activeTab === "chat" && (
               <div className="card">
-                {/* (نفس كود chat عندك) */}
                 <h2 className="card-title">Group chat</h2>
                 <p className="muted-text">
                   Use this simple chat to leave notes and updates for your study group.
@@ -766,9 +807,7 @@ export default function GroupDashboard() {
                         <div key={msg.id} className="chat-message">
                           <div className="chat-meta">
                             <span className="chat-author">Member</span>
-                            <span className="chat-time">
-                              {msg.created_at || ""}
-                            </span>
+                            <span className="chat-time">{msg.created_at || ""}</span>
                           </div>
                           <div className="chat-content">{msg.content}</div>
                         </div>
@@ -796,9 +835,9 @@ export default function GroupDashboard() {
               </div>
             )}
 
+            {/* ================= TASKS ================= */}
             {activeTab === "tasks" && (
               <div className="card">
-                {/* (نفس كود tasks عندك) */}
                 <div className="card-header-row">
                   <h2 className="card-title">Tasks &amp; Assignments</h2>
                   <span className="badge">{totalTasks} tasks</span>
@@ -826,10 +865,7 @@ export default function GroupDashboard() {
                       placeholder="Details about this task..."
                       value={newTask.description}
                       onChange={(e) =>
-                        setNewTask((t) => ({
-                          ...t,
-                          description: e.target.value,
-                        }))
+                        setNewTask((t) => ({ ...t, description: e.target.value }))
                       }
                     />
                   </div>
@@ -840,10 +876,7 @@ export default function GroupDashboard() {
                       type="date"
                       value={newTask.due_date}
                       onChange={(e) =>
-                        setNewTask((t) => ({
-                          ...t,
-                          due_date: e.target.value,
-                        }))
+                        setNewTask((t) => ({ ...t, due_date: e.target.value }))
                       }
                     />
                     <select
@@ -898,6 +931,7 @@ export default function GroupDashboard() {
                       <button
                         className="btn-danger-small"
                         onClick={() => deleteTask(task.id)}
+                        type="button"
                       >
                         Delete
                       </button>
@@ -913,9 +947,9 @@ export default function GroupDashboard() {
               </div>
             )}
 
+            {/* ================= SESSIONS ================= */}
             {activeTab === "sessions" && (
               <div className="card">
-                {/* (نفس كود sessions عندك) */}
                 <div className="card-header-row">
                   <h2 className="card-title">Study Sessions</h2>
                   <span className="badge">
@@ -945,10 +979,7 @@ export default function GroupDashboard() {
                       placeholder="Agenda / chapters"
                       value={newSession.description}
                       onChange={(e) =>
-                        setNewSession((s) => ({
-                          ...s,
-                          description: e.target.value,
-                        }))
+                        setNewSession((s) => ({ ...s, description: e.target.value }))
                       }
                     />
                   </div>
@@ -979,10 +1010,7 @@ export default function GroupDashboard() {
                       step="5"
                       value={newSession.duration_minutes}
                       onChange={(e) =>
-                        setNewSession((s) => ({
-                          ...s,
-                          duration_minutes: e.target.value,
-                        }))
+                        setNewSession((s) => ({ ...s, duration_minutes: e.target.value }))
                       }
                     />
                     <button type="submit" className="btn-primary-small">
@@ -999,22 +1027,52 @@ export default function GroupDashboard() {
                   ) : (
                     sessions.map((session) => {
                       const durationMinutes = getDurationMinutes(session);
+                      const status = session.status || "scheduled"; // احتياط
+
                       return (
                         <div key={session.id} className="task-item">
                           <div className="task-main">
                             <div>
                               <div className="task-title">{session.title || "Study session"}</div>
+
                               {session.description && (
                                 <div className="task-desc">{session.description}</div>
                               )}
+
                               <div className="task-meta">
                                 {session.start_time && (
                                   <span>📅 {formatDateTime(session.start_time)}</span>
                                 )}
-                                {durationMinutes && (
-                                  <span style={{ marginLeft: "6px" }}>
-                                    ⏱ {durationMinutes} min
+
+                                <span style={{ marginLeft: "6px" }}>
+                                  ⏱ {durationMinutes} min
+                                </span>
+
+                                {/* ✅ Start / Live / End */}
+                                {status === "scheduled" && (
+                                  <button
+                                    type="button"
+                                    style={{ marginLeft: 10 }}
+                                    onClick={() => startSession(session.id)}
+                                  >
+                                    Start
+                                  </button>
+                                )}
+
+                                {status === "active" && (
+                                  <span className="live-badge" style={{ marginLeft: 10 }}>
+                                    LIVE
                                   </span>
+                                )}
+
+                                {status === "active" && (
+                                  <button
+                                    type="button"
+                                    style={{ marginLeft: 10 }}
+                                    onClick={() => endSession(session.id)}
+                                  >
+                                    End
+                                  </button>
                                 )}
                               </div>
                             </div>
@@ -1022,7 +1080,8 @@ export default function GroupDashboard() {
 
                           <button
                             className="btn-danger-small"
-                            onClick={() => deleteSession(session.id)}
+                            type="button"
+                            onClick={() => deleteSessionHandler(session.id)}
                           >
                             Delete
                           </button>
@@ -1031,6 +1090,9 @@ export default function GroupDashboard() {
                     })
                   )}
                 </div>
+
+                {/* now state موجود عندك (ما يحتاجه UI حالياً) */}
+                <div style={{ display: "none" }}>{now}</div>
               </div>
             )}
           </>

@@ -25,6 +25,8 @@ class StudySession(db.Model):
     # المدة بالدقائق، عشان التايمر في الواجهة
     duration_minutes = db.Column(db.Integer, nullable=True)
 
+    status = db.Column(db.String(20), default="scheduled", nullable=False)
+
     # من اللي أنشأ الجلسة
     created_by = db.Column(
         db.Integer,

@@ -4,21 +4,19 @@ from flask import Flask
 from flask_cors import CORS
 from sqlalchemy import text
 
-
-
 from extensions import db, jwt
 
 
 def create_app():
-    # تحميل متغيرات البيئة (.env أو من Render)
+    # تحميل متغيرات البيئة
     load_dotenv()
 
     app = Flask(__name__)
 
-    # ---------- DB ----------
+    # ---------- DATABASE ----------
     raw_db_url = os.getenv("DATABASE_URL", "sqlite:///vsgp.db")
 
-    # لو Render عطانا postgres:// نحوله لصيغة تقبلها SQLAlchemy
+    # دعم PostgreSQL (Render)
     if raw_db_url.startswith("postgres://"):
         raw_db_url = raw_db_url.replace("postgres://", "postgresql://", 1)
 
@@ -31,7 +29,7 @@ def create_app():
     app.config["JWT_HEADER_TYPE"] = "Bearer"
     app.config["JWT_COOKIE_CSRF_PROTECT"] = False
 
-    # ---------- Uploads ----------
+    # ---------- UPLOADS ----------
     upload_folder = os.path.join(os.path.dirname(__file__), "uploads")
     app.config["UPLOAD_FOLDER"] = upload_folder
     os.makedirs(upload_folder, exist_ok=True)
@@ -44,41 +42,38 @@ def create_app():
         supports_credentials=True,
     )
 
-    # init extensions
+    # ---------- INIT EXTENSIONS ----------
     db.init_app(app)
     jwt.init_app(app)
 
-    # important: import models so SQLAlchemy sees them
+    # ---------- IMPORT MODELS ----------
     from models.user import User
     from models.group import Group
     from models.group_member import GroupMember
     from models.file import GroupFile
-    from models.session import StudySession  
+    from models.session import StudySession
 
-    # blueprints
+    # ---------- IMPORT BLUEPRINTS ----------
     from routes.auth import auth_bp
     from routes.groups import groups_bp
     from routes.tasks import tasks_bp
     from routes.messages import messages_bp
     from routes.sessions import sessions_bp
+    from routes.files import files_bp   # ✅ مهم
 
-    # لو عندكم sessions:
-    # from routes.sessions import sessions_bp
-   
+    # ---------- REGISTER BLUEPRINTS ----------
     app.register_blueprint(auth_bp, url_prefix="/auth")
     app.register_blueprint(groups_bp, url_prefix="/groups")
     app.register_blueprint(tasks_bp, url_prefix="/groups")
     app.register_blueprint(messages_bp, url_prefix="/groups")
-    app.register_blueprint(sessions_bp, url_prefix="/groups") 
-    
+    app.register_blueprint(sessions_bp, url_prefix="/groups")
+    app.register_blueprint(files_bp, url_prefix="/groups")  # ✅ رفع الملفات
 
-    # app.register_blueprint(sessions_bp, url_prefix="/groups")
-
-    # ---------- DB init & seed ----------
+    # ---------- DB INIT ----------
     with app.app_context():
         db.create_all()
 
-        # جدول الرسائل البسيط (للدردشة)
+        # جدول الرسائل (لو ما كان موجود)
         db.session.execute(
             text(
                 """
@@ -92,6 +87,7 @@ def create_app():
             )
         )
 
+        # ---------- DEFAULT ADMIN ----------
         from werkzeug.security import generate_password_hash
 
         default_email = os.getenv("DEFAULT_ADMIN_EMAIL", "noon@test.com")
@@ -100,18 +96,27 @@ def create_app():
         existing = User.query.filter_by(email=default_email).first()
         if not existing:
             pw_hash = generate_password_hash(default_password)
-            user = User(name="Noon", email=default_email, password_hash=pw_hash)
+            user = User(
+                name="Noon",
+                email=default_email,
+                password_hash=pw_hash
+            )
             db.session.add(user)
 
         db.session.commit()
 
+    # ---------- HEALTH CHECK ----------
     @app.get("/health")
     def health():
-        return {"ok": True, "db": app.config["SQLALCHEMY_DATABASE_URI"]}
+        return {
+            "ok": True,
+            "db": app.config["SQLALCHEMY_DATABASE_URI"]
+        }
 
     return app
 
 
+# ---------- JWT USER LOADER ----------
 @jwt.user_lookup_loader
 def load_user_callback(_jwt_header, jwt_data):
     from models.user import User
@@ -121,4 +126,5 @@ def load_user_callback(_jwt_header, jwt_data):
         user_id = int(identity)
     except (TypeError, ValueError):
         return None
+
     return User.query.get(user_id)
