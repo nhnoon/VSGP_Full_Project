@@ -1,0 +1,5 @@
+DATABASE_URL=sqlite:///vsgp.db
+SECRET_KEY=super_secret_for_jwt
+
+
+
